@@ -1,0 +1,348 @@
+<style>
+  :root { --accent: #60a5fa; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 12px; min-height: 100vh; color: #f1f5f9;
+         font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+         background: linear-gradient(160deg, #0f172a 0%, #1e1b4b 60%, #311b5c 100%); }
+  button, input { font-family: inherit; }
+  [hidden] { display: none !important; }
+
+  /* Thanh mini: chỉ hiện ở tab Phát âm */
+  .mini { display: flex; align-items: center; gap: 10px; padding: 8px 10px; margin-bottom: 10px;
+          border-radius: 14px; background: rgba(255,255,255,.1); box-shadow: inset 0 0 0 1.5px var(--accent); }
+  #app[data-page=timer] .mini { display: none; }
+  #mEm { font-size: 22px; }
+  .mi { flex: 1; line-height: 1.2; }
+  #mName { font-size: 11px; opacity: .7; }
+  #mTime { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  #mBtn { width: 40px; height: 40px; border: 0; border-radius: 50%; font-size: 16px;
+          background: var(--accent); color: #0f172a; cursor: pointer; }
+  #mBtn:disabled { opacity: .5; }
+
+  .nav { display: flex; gap: 6px; margin-bottom: 12px; }
+  .nv { flex: 1; padding: 9px; border: 0; border-radius: 12px; font-size: 13px; font-weight: 600;
+        color: #cbd5e1; background: rgba(255,255,255,.07); cursor: pointer; }
+  .nv.active { color: #0f172a; background: var(--accent); }
+
+  /* Tab Đồng hồ */
+  .top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+  .top b { font-size: 17px; }  #total { font-size: 12px; opacity: .7; }
+  .tabs { display: flex; gap: 6px; }
+  .tab { flex: 1; text-align: center; font-size: 11px; padding: 7px 2px; border-radius: 12px;
+         background: rgba(255,255,255,.07); cursor: pointer; }
+  .tab .em { display: block; font-size: 19px; }
+  .tab.active { background: rgba(255,255,255,.16); box-shadow: inset 0 0 0 1.5px var(--tc); }
+  .tab.run .em { animation: pulse 1.2s infinite; }
+  @keyframes pulse { 50% { transform: scale(1.25); } }
+  .stage { text-align: center; margin: 12px 0 2px; }
+  #glass { width: 130px; height: 195px; transition: filter .4s; }
+  .running #glass { filter: drop-shadow(0 0 16px var(--accent)); }
+  .stream { stroke-dasharray: 3 4; animation: flow .5s linear infinite; }
+  @keyframes flow { to { stroke-dashoffset: -14; } }
+  .time { font-size: 38px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .state { font-size: 13px; opacity: .7; }
+  .quote { font-size: 12.5px; line-height: 1.5; text-align: center; font-style: italic; opacity: .85;
+           padding: 10px 12px; margin: 12px 0; border-radius: 12px; background: rgba(255,255,255,.06); }
+  .main { width: 100%; padding: 13px; border: 0; border-radius: 14px; font-size: 15px; font-weight: 700;
+          color: #0f172a; background: var(--accent); cursor: pointer; }
+  .main.pause { background: transparent; color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
+  .main:disabled { opacity: .5; }
+
+  /* Nút đặt lại + ô nhập thời gian */
+  .reset { width: 100%; margin-top: 8px; padding: 9px; border: 0; border-radius: 12px; font-size: 13px;
+           font-weight: 600; color: #cbd5e1; background: rgba(255,255,255,.07); cursor: pointer; }
+  .reset.confirm { color: #fecaca; background: rgba(239,68,68,.25); box-shadow: inset 0 0 0 1.5px #f87171; }
+  .setrow { display: flex; gap: 6px; margin-top: 8px; }
+  .setrow input { flex: 1; min-width: 0; padding: 9px; border: 0; border-radius: 10px; font-size: 13px;
+                  color: #f1f5f9; background: rgba(255,255,255,.1); }
+  .setrow button { padding: 9px 16px; border: 0; border-radius: 10px; font-size: 13px; font-weight: 700;
+                   color: #0f172a; background: var(--accent); cursor: pointer; }
+
+  .row { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: 10px; }
+  .row .n { width: 66px; opacity: .85; }
+  .row .bar { flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,.1); overflow: hidden; }
+  .row .fill { height: 100%; border-radius: 3px; }
+  .row .l { width: 58px; text-align: right; font-variant-numeric: tabular-nums; opacity: .8; }
+
+  /* Tab Phát âm */
+  .card { padding: 16px; border-radius: 16px; background: rgba(255,255,255,.08); text-align: center; }
+  #word { font-size: 24px; font-weight: 700; color: var(--accent); min-height: 34px; word-break: break-word; }
+  #status { font-size: 12px; opacity: .7; margin: 4px 0 14px; min-height: 16px; }
+  #typed { width: 100%; padding: 10px; margin-top: 10px; border: 0; border-radius: 10px; font-size: 14px;
+           color: #f1f5f9; background: rgba(255,255,255,.1); }
+  .ghost { width: 100%; padding: 10px; margin-top: 8px; border: 0; border-radius: 10px; font-size: 14px;
+           font-weight: 600; color: var(--accent); background: transparent; box-shadow: inset 0 0 0 1.5px var(--accent); cursor: pointer; }
+  .speeds { display: flex; justify-content: center; gap: 8px; margin-top: 14px; }
+  .sp { padding: 6px 14px; border: 0; border-radius: 8px; font-size: 12px; font-weight: 600;
+        color: #cbd5e1; background: rgba(255,255,255,.1); cursor: pointer; }
+  .sp.active { color: #0f172a; background: var(--accent); }
+</style>
+
+<div id="app" data-page="timer">
+
+  <!-- Thanh mini (hiện ở tab Phát âm) -->
+  <div class="mini">
+    <span id="mEm"></span>
+    <div class="mi"><div id="mName"></div><div id="mTime">--:--:--</div></div>
+    <button id="mBtn" onclick="toggleMini()">▶</button>
+  </div>
+
+  <div class="nav">
+    <button class="nv active" id="nvTimer" onclick="showPage('timer')">⏱ Đồng hồ</button>
+    <button class="nv" id="nvSpeak" onclick="showPage('speak')">🔊 Phát âm</button>
+  </div>
+
+  <!-- ===== TAB ĐỒNG HỒ ===== -->
+  <section id="pgTimer">
+    <div class="top"><b>Hôm nay</b><span id="total"></span></div>
+    <div class="tabs" id="tabs"></div>
+
+    <div class="stage">
+      <svg id="glass" viewBox="0 0 120 180">
+        <defs>
+          <path id="gp" d="M22 14 H98 V34 C98 66 66 78 64 90 C66 102 98 114 98 146 V166 H22 V146 C22 114 54 102 56 90 C54 78 22 66 22 34 Z"/>
+          <clipPath id="clip"><use href="#gp"/></clipPath>
+          <linearGradient id="sand" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" style="stop-color:var(--accent)"/>
+            <stop offset="1" style="stop-color:var(--accent);stop-opacity:.6"/>
+          </linearGradient>
+        </defs>
+        <use href="#gp" fill="rgba(255,255,255,.06)"/>
+        <g clip-path="url(#clip)">
+          <rect id="sandTop" x="0" width="120" fill="url(#sand)"/>
+          <rect id="sandBot" x="0" width="120" fill="url(#sand)"/>
+        </g>
+        <line id="stream" class="stream" x1="60" x2="60" y1="88" stroke-width="2" style="stroke:var(--accent)"/>
+        <use href="#gp" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="3"/>
+        <rect x="14" y="5" width="92" height="9" rx="4.5" fill="rgba(255,255,255,.7)"/>
+        <rect x="14" y="166" width="92" height="9" rx="4.5" fill="rgba(255,255,255,.7)"/>
+      </svg>
+      <div class="time" id="time">--:--:--</div>
+      <div class="state" id="state">Đang tải...</div>
+    </div>
+
+    <div class="quote" id="quote"></div>
+    <button class="main" id="btn" onclick="toggleSel()">...</button>
+    <button class="reset" id="btnReset" onclick="resetSel()">↺ Đặt lại môn này</button>
+    <div class="setrow">
+      <input id="setMin" placeholder="phút (90) hoặc 1:30" onkeydown="if(event.key==='Enter')setTime()">
+      <button onclick="setTime()">Đặt</button>
+    </div>
+    <div id="list"></div>
+  </section>
+
+  <!-- ===== TAB PHÁT ÂM ===== -->
+  <section id="pgSpeak" hidden>
+    <div class="card">
+      <div id="word">—</div>
+      <div id="status">Chọn ô ở cột B rồi bấm nút bên dưới</div>
+      <button class="main" id="btnPlay" onclick="speakCell()">🔊 Nghe ô đang chọn (cột B)</button>
+      <input id="typed" placeholder="Hoặc gõ một từ vào đây..." onkeydown="if(event.key==='Enter')speakTyped()">
+      <button class="ghost" onclick="speakTyped()">▶ Nghe từ đã gõ</button>
+      <div class="speeds">
+        <button class="sp active" onclick="setSpeed(1, this)">Chuẩn 1.0x</button>
+        <button class="sp" onclick="setSpeed(0.75, this)">Chậm 0.75x</button>
+      </div>
+    </div>
+    <audio id="audioPlayer"></audio>
+  </section>
+</div>
+
+<script>
+// ================= DÙNG CHUNG =================
+const $ = id => document.getElementById(id);
+const PALETTE = ['#60a5fa', '#c084fc', '#4ade80', '#fb923c', '#f472b6'];
+
+function showPage(p) {
+  $('app').dataset.page = p;
+  $('pgTimer').hidden = p !== 'timer';
+  $('pgSpeak').hidden = p !== 'speak';
+  $('nvTimer').classList.toggle('active', p === 'timer');
+  $('nvSpeak').classList.toggle('active', p === 'speak');
+}
+
+// ================= BỘ ĐẾM =================
+const QUOTES = [
+  'Mỗi phút hôm nay là một viên gạch xây nên phiên bản tốt hơn của bạn.',
+  'Không cần hoàn hảo, chỉ cần có mặt đều đặn mỗi ngày.',
+  'Hạt cát nào cũng rơi xuống, hãy để nó rơi vào việc bạn thật sự muốn.',
+  'Bạn của ngày mai sẽ cảm ơn bạn của hôm nay.',
+  'Mệt thì nghỉ một chút rồi quay lại, tiến độ vẫn còn đó.',
+  'Đừng nhìn cả ngọn núi, chỉ cần nhìn bước chân tiếp theo.',
+  'Một giờ tập trung đáng giá hơn ba giờ lướt điện thoại.',
+  'Bắt đầu là phần khó nhất, và bạn đang làm được rồi đó.',
+];
+
+let date = '', tasks = [], sel = 0;
+const pad = n => String(n).padStart(2, '0');
+const fmt = s => { s = Math.ceil(s); return pad(s/3600|0) + ':' + pad(s%3600/60|0) + ':' + pad(s%60); };
+const hm = s => { s = Math.round(s / 60); return (s/60|0) + 'h' + pad(s%60); };
+
+// Còn lại = số đã chốt - thời gian thật đã trôi từ lúc bấm bắt đầu
+const leftNow = t => t.runStart ? Math.max(0, t.left - (Date.now() - t.runStart) / 1000) : t.left;
+const pause = t => { t.left = leftNow(t); t.runStart = null; };
+const runningIdx = () => tasks.findIndex(t => t.runStart);
+
+function setQuote() { $('quote').textContent = QUOTES[Math.floor(Math.random() * QUOTES.length)]; }
+function selectTask(i) { sel = i; cancelReset(); setQuote(); tick(); }
+
+function startStop(i) {
+  const t = tasks[i];
+  if (t.runStart) pause(t);
+  else { tasks.forEach(pause); t.runStart = Date.now(); }   // chỉ chạy 1 môn một lúc
+  setQuote(); save(); tick();
+}
+const toggleSel  = () => startStop(sel);
+const toggleMini = () => { const r = runningIdx(); startStop(r >= 0 ? r : sel); };
+
+// Đặt lại môn đang chọn: bấm 2 lần (lần 1 hỏi xác nhận, tự hủy sau 3 giây)
+let resetTimer = null;
+function cancelReset() {
+  clearTimeout(resetTimer);
+  const b = $('btnReset');
+  b.classList.remove('confirm');
+  b.textContent = '↺ Đặt lại môn này';
+}
+function resetSel() {
+  const b = $('btnReset');
+  if (!b.classList.contains('confirm')) {
+    b.classList.add('confirm');
+    b.textContent = '⚠️ Bấm lần nữa để xác nhận';
+    resetTimer = setTimeout(cancelReset, 3000);
+    return;
+  }
+  cancelReset();
+  const t = tasks[sel];
+  t.runStart = null;       // dừng nếu đang chạy
+  t.left = t.goal;         // về lại thời gian ban đầu (mục tiêu hiện tại)
+  setQuote(); save(); tick();
+}
+
+// "90" → 90 phút; "1:30" → 1 giờ 30 phút. Trả về số giây (0 nếu không hợp lệ)
+function parseTime(s) {
+  s = s.trim();
+  let min;
+  if (s.includes(':')) { const [h, m] = s.split(':'); min = (+h) * 60 + (+m || 0); }
+  else min = +s;
+  return min > 0 && min <= 24 * 60 ? Math.round(min * 60) : 0;
+}
+
+function setTime() {
+  const sec = parseTime($('setMin').value);
+  if (!sec) { $('setMin').value = ''; $('setMin').placeholder = 'Nhập số hợp lệ (tối đa 24h)'; return; }
+
+  const t = tasks[sel];
+  t.runStart = null;     // dừng nếu đang chạy
+  t.goal = sec;          // mục tiêu mới
+  t.left = sec;          // đếm lại từ đầu
+  google.script.run.saveGoal(t.id, sec);   // nhớ cho những ngày sau
+  $('setMin').value = '';
+  setQuote(); save(); tick();
+}
+
+function save() {
+  const left = {};
+  tasks.forEach(t => left[t.id] = leftNow(t));
+  google.script.run.saveLeft(date, left);
+}
+
+function build() {   // dựng khung 1 lần
+  $('tabs').innerHTML = tasks.map((t, i) =>
+    `<div class="tab" style="--tc:${PALETTE[i % PALETTE.length]}" onclick="selectTask(${i})">
+       <span class="em">${t.emoji}</span>${t.name}</div>`).join('');
+  $('list').innerHTML = tasks.map((t, i) =>
+    `<div class="row"><span class="n">${t.name}</span>
+       <div class="bar"><div class="fill" id="f${i}" style="background:${PALETTE[i % PALETTE.length]}"></div></div>
+       <span class="l" id="l${i}"></span></div>`).join('');
+}
+
+function tick() {   // cập nhật giao diện mỗi giây
+  tasks.forEach(t => { if (t.runStart && leftNow(t) <= 0) { pause(t); save(); } });
+
+  const r = runningIdx(), cur = r >= 0 ? r : sel;       // môn đang chạy (nếu có) hoặc môn đang chọn
+  const c = tasks[cur], lc = leftNow(c);
+  document.documentElement.style.setProperty('--accent', PALETTE[cur % PALETTE.length]);
+  $('app').classList.toggle('running', r >= 0);
+
+  // Thanh mini
+  $('mEm').textContent = c.emoji;
+  $('mName').textContent = c.name;
+  $('mTime').textContent = fmt(lc);
+  $('mBtn').textContent = c.runStart ? '⏸' : '▶';
+  $('mBtn').disabled = lc <= 0;
+
+  // Tab đồng hồ (theo môn đang chọn ở tab)
+  const t = tasks[sel], l = leftNow(t), done = l <= 0, running = !!t.runStart;
+  const frac = Math.max(0, Math.min(1, l / t.goal));
+  const top = 76 * frac, bot = 76 - top;                // cát trên vơi, cát dưới đầy
+  $('sandTop').setAttribute('y', 90 - top);  $('sandTop').setAttribute('height', top);
+  $('sandBot').setAttribute('y', 166 - bot); $('sandBot').setAttribute('height', bot);
+  $('stream').setAttribute('y2', 166 - bot);
+  $('stream').style.display = (running && !done) ? '' : 'none';
+
+  $('time').textContent = fmt(l);
+  $('state').textContent = done ? '🎉 Hoàn thành! Giỏi lắm!' : running ? '🔥 Đang tập trung...'
+                         : l < t.goal ? '⏸ Đang tạm dừng' : 'Sẵn sàng bắt đầu';
+  $('btn').textContent = done ? '✅ Đã xong mục này' : running ? '⏸ Tạm dừng' : (l < t.goal ? '▶ Tiếp tục' : '▶ Bắt đầu');
+  $('btn').className = 'main' + (running ? ' pause' : '');
+  $('btn').disabled = done;
+
+  document.querySelectorAll('.tab').forEach((el, i) => {
+    el.classList.toggle('active', i === sel);
+    el.classList.toggle('run', !!tasks[i].runStart);
+  });
+
+  let got = 0, goal = 0;
+  tasks.forEach((x, i) => {
+    const lx = leftNow(x);
+    got += x.goal - lx; goal += x.goal;
+    $('f' + i).style.width = ((1 - lx / x.goal) * 100) + '%';
+    $('l' + i).textContent = lx <= 0 ? '✅' : 'còn ' + hm(lx);
+  });
+  $('total').textContent = 'Đã học ' + hm(got) + ' / ' + hm(goal);
+}
+
+google.script.run.withSuccessHandler(s => {
+  date = s.date; tasks = s.tasks;
+  sel = Math.max(0, tasks.findIndex(t => t.left > 0));
+  build(); setQuote(); tick();
+  setInterval(tick, 1000);
+  setInterval(save, 5000);
+}).getState();
+
+// ================= PHÁT ÂM =================
+let speed = 1;
+
+function setSpeed(rate, btn) {
+  speed = rate;
+  document.querySelectorAll('.sp').forEach(b => b.classList.toggle('active', b === btn));
+  $('audioPlayer').playbackRate = rate;
+}
+
+function onAudio(res) {
+  $('btnPlay').disabled = false;
+  if (!res || !res.success) {
+    $('status').textContent = res ? res.message : 'Không nhận diện được!';
+    $('word').textContent = '—';
+    return;
+  }
+  $('word').textContent = res.word;
+  $('status').textContent = 'Đang phát: ' + res.word;
+  const a = $('audioPlayer');
+  a.src = 'data:audio/mp3;base64,' + res.audioBase64;   // server trả về mp3 dạng base64
+  a.playbackRate = speed;
+  a.play().catch(e => { $('status').textContent = 'Lỗi phát âm: ' + e.message; });
+}
+
+function audioRunner() {
+  $('status').textContent = 'Đang tải âm thanh...';
+  $('btnPlay').disabled = true;
+  return google.script.run.withSuccessHandler(onAudio).withFailureHandler(err => {
+    $('btnPlay').disabled = false;
+    $('status').textContent = 'Lỗi hệ thống: ' + err.message;
+  });
+}
+
+const speakCell  = () => audioRunner().getGoogleAudioForSelectedCell();
+const speakTyped = () => audioRunner().getGoogleAudioForWord($('typed').value);
+</script>
