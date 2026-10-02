@@ -13,11 +13,36 @@ import {
   Hourglass,
   Focus,
   Quote,
+  Headphones,
+  Activity,
+  CloudRain,
+  Flame,
+  Waves,
+  Trees,
+  Coffee,
+  Bell,
+  Wind,
 } from 'lucide-react';
 import { getRemainingSeconds, getTaskStatus } from '../lib/timer-engine.js';
 import { formatRemaining, formatDurationShort } from '../lib/time-parser.js';
 import AmbientBackground from './AmbientBackground';
-import { ambientSound } from '../lib/ambient-sound.js';
+import { ambientSound, SOUND_PRESETS } from '../lib/ambient-sound.js';
+
+function getSoundIcon(id, size = 13) {
+  switch (id) {
+    case 'brown': return <Headphones size={size} />;
+    case 'binaural': return <Activity size={size} />;
+    case 'rain': return <CloudRain size={size} />;
+    case 'fireplace': return <Flame size={size} />;
+    case 'waves': return <Waves size={size} />;
+    case 'forest': return <Trees size={size} />;
+    case 'cafe': return <Coffee size={size} />;
+    case 'bowl': return <Bell size={size} />;
+    case 'clock': return <Clock size={size} />;
+    case 'white': return <Wind size={size} />;
+    default: return <VolumeX size={size} />;
+  }
+}
 
 export const FAMOUS_QUOTES = [
   { text: "Stay hungry, stay foolish.", author: "Steve Jobs" },
@@ -55,6 +80,7 @@ export default function PipFloatingTimer({
   const clipId = useId().replace(/:/g, '');
 
   const [taskPicker, setTaskPicker] = useState(false);
+  const [soundPicker, setSoundPicker] = useState(false);
   const [customInput, setCustomInput] = useState(false);
   const [inputVal, setInputVal] = useState('');
   const [confirmReset, setConfirmReset] = useState(false);
@@ -63,9 +89,12 @@ export default function PipFloatingTimer({
   // Visual, Sound & Quote states
   const [visualMode, setVisualMode] = useState('hourglass'); // 'hourglass' | 'ring' | 'digits'
   const [particleMode, setParticleMode] = useState('snow'); // 'snow' | 'stardust' | 'off'
-  const [soundMode, setSoundMode] = useState('off'); // 'off' | 'rain' | 'clock' | 'zen'
+  const [soundMode, setSoundMode] = useState(ambientSound.getSound());
+  const [soundVolume, setSoundVolume] = useState(ambientSound.getVolume());
   const [quoteIdx, setQuoteIdx] = useState(0);
   const [isFading, setIsFading] = useState(false);
+
+  const currentPreset = SOUND_PRESETS.find(p => p.id === soundMode) || SOUND_PRESETS[0];
 
   // Responsive layout detection based on real container & PiP window dimensions
   useEffect(() => {
@@ -109,6 +138,7 @@ export default function PipFloatingTimer({
     if (isBar) {
       setCustomInput(false);
       setTaskPicker(false);
+      setSoundPicker(false);
       setConfirmReset(false);
     }
   }, [isBar]);
@@ -239,6 +269,72 @@ export default function PipFloatingTimer({
                   <span className="emoji">{t.emoji}</span>
                   <span className="name">{t.name}</span>
                   <span className="time">{formatDurationShort(rem)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Sound Selector Popover inside PiP */}
+      {soundPicker && !isBar && (
+        <div className="pip-task-modal pip-sound-modal">
+          <div className="pip-modal-header">
+            <div className="modal-title-with-icon">
+              <Headphones size={13} className="accent-icon" />
+              <span>Âm thanh tập trung ({SOUND_PRESETS.length - 1} loại)</span>
+            </div>
+            <button
+              type="button"
+              className="pip-icon-btn"
+              onClick={() => setSoundPicker(false)}
+              title="Đóng menu âm thanh"
+            >
+              <X size={14} />
+            </button>
+          </div>
+
+          <div className="pip-sound-volume-bar">
+            <div className="volume-info">
+              <span>Âm lượng nền</span>
+              <strong>{Math.round(soundVolume * 100)}%</strong>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={soundVolume}
+              onChange={e => {
+                const val = parseFloat(e.target.value);
+                setSoundVolume(val);
+                ambientSound.setVolume(val);
+              }}
+              className="pip-volume-slider"
+            />
+          </div>
+
+          <div className="pip-modal-list sound-list-scroll">
+            {SOUND_PRESETS.map(preset => {
+              const isCurrent = soundMode === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  className={`pip-sound-row ${isCurrent ? 'active' : ''}`}
+                  onClick={() => {
+                    ambientSound.play(preset.id);
+                    setSoundMode(preset.id);
+                  }}
+                >
+                  <span className={`sound-icon-box ${isCurrent ? 'active' : ''}`}>
+                    {getSoundIcon(preset.id, 14)}
+                  </span>
+                  <div className="sound-text-col">
+                    <span className="sound-title">{preset.name}</span>
+                    <span className="sound-subtitle">{preset.desc}</span>
+                  </div>
+                  {isCurrent && <Check size={14} className="sound-active-check" />}
                 </button>
               );
             })}
@@ -422,20 +518,19 @@ export default function PipFloatingTimer({
               <button
                 type="button"
                 className={`pip-tool-btn ${soundMode !== 'off' ? 'active' : ''}`}
-                onClick={handleSoundCycle}
+                onClick={() => {
+                  setSoundPicker(!soundPicker);
+                  setTaskPicker(false);
+                }}
                 title={
-                  soundMode === 'rain'
-                    ? 'Âm thanh: Tiếng mưa rơi êm dịu (Bấm đổi sóng biển)'
-                    : soundMode === 'zen'
-                    ? 'Âm thanh: Sóng biển Zen (Bấm đổi tích tắc)'
-                    : soundMode === 'clock'
-                    ? 'Âm thanh: Tích tắc đồng hồ (Bấm để tắt)'
-                    : 'Bật âm thanh tập trung (Mưa / Sóng biển / Đồng hồ)'
+                  soundMode === 'off'
+                    ? 'Bật âm thanh tập trung (10 loại: Tiếng ồn nâu, Sóng não Alpha, Mưa rào, Bếp lửa, Sóng biển, Rừng thông, Cà phê...)'
+                    : `Đang phát: ${currentPreset?.name} (Bấm để chọn 10 loại âm hoặc chỉnh âm lượng)`
                 }
               >
-                {soundMode === 'off' ? <VolumeX size={13} /> : <Volume2 size={13} />}
+                {getSoundIcon(soundMode, 13)}
                 <span className="tool-label">
-                  {soundMode === 'rain' ? 'Mưa' : soundMode === 'zen' ? 'Sóng' : soundMode === 'clock' ? 'Tắc' : 'Âm'}
+                  {currentPreset?.label || 'Âm'}
                 </span>
               </button>
             </div>

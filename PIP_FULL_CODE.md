@@ -701,14 +701,25 @@ export default function PipFloatingTimer({
             </button>
           </header>
 
-          {/* Inspiring Famous Quote Banner */}
+          {/* Luminous Frosted Glass Quote Capsule */}
           <div
-            className="pip-quote-banner"
+            className={`pip-quote-capsule ${isFading ? 'fading' : ''}`}
             onClick={handleNextQuote}
-            title="Bấm để đổi câu danh ngôn truyền cảm hứng tiếp theo"
+            role="button"
+            tabIndex={0}
+            title="Bấm để đổi câu danh ngôn tiếp theo (Click to cycle quote)"
           >
-            <span className="quote-sparkle">✦</span>
-            <span className="quote-text">{FAMOUS_QUOTES[quoteIdx]}</span>
+            <div className="quote-badge-glow">
+              <span className="quote-sparkle">✦</span>
+            </div>
+            <div className="quote-content">
+              <span className="quote-text">“{FAMOUS_QUOTES[quoteIdx].text}”</span>
+              <span className="quote-author">— {FAMOUS_QUOTES[quoteIdx].author}</span>
+            </div>
+            <span className="quote-shimmer-sweep" />
+            <div className="quote-progress-track">
+              <div className="quote-progress-fill" key={quoteIdx} />
+            </div>
           </div>
 
           <div className="pip-visual-switch">
