@@ -1,279 +1,184 @@
-const { app, BrowserWindow, ipcMain, screen, Notification, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Notification, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
-
-let mainWindow = null;
-
-// Kích thước chuẩn các chế độ
+const { pathToFileURL } = require('url');
+const { fitBounds, cornerBounds } = require('./window-geometry.cjs');
+const DEV_URL = 'http://127.0.0.1:3000';
+const isDev = !app.isPackaged && process.argv.includes('--dev');
+const indexPath = path.join(__dirname, '../out/index.html');
+const indexURL = pathToFileURL(indexPath).href;
 const SIZES = {
-  full: { width: 880, height: 640, minWidth: 480, minHeight: 480 },
-  'mini-card': { width: 320, height: 180, minWidth: 280, minHeight: 160 },
-  'mini-bar': { width: 330, height: 58, minWidth: 280, minHeight: 52 },
+  full: { width: 1080, height: 760, minWidth: 520, minHeight: 480 },
+  'mini-card': { width: 344, height: 224, minWidth: 344, minHeight: 224 },
+  'mini-bar': { width: 390, height: 84, minWidth: 390, minHeight: 84 },
 };
-
-let currentMode = 'full';
-let savedFullBounds = { width: 880, height: 640 };
-let isAlwaysOnTop = false;
-
-// Đường dẫn file lưu trữ local userData
-const getDataFilePath = () => path.join(app.getPath('userData'), 'flow_timer_data.json');
-
-/**
- * Đảm bảo vị trí cửa sổ luôn nằm trong vùng hiển thị an toàn của màn hình
- */
-function ensureWindowVisible(win) {
-  if (!win || win.isDestroyed()) return;
-
-  const winBounds = win.getBounds();
-  const currentDisplay = screen.getDisplayMatching(winBounds);
-  const workArea = currentDisplay.workArea;
-
-  let x = winBounds.x;
-  let y = winBounds.y;
-  let reposition = false;
-
-  // Kiểm tra nếu cửa sổ lọt ra ngoài màn hình
-  if (x < workArea.x) {
-    x = workArea.x + 20;
-    reposition = true;
-  } else if (x + winBounds.width > workArea.x + workArea.width) {
-    x = workArea.x + workArea.width - winBounds.width - 20;
-    reposition = true;
-  }
-
-  if (y < workArea.y) {
-    y = workArea.y + 20;
-    reposition = true;
-  } else if (y + winBounds.height > workArea.y + workArea.height) {
-    y = workArea.y + workArea.height - winBounds.height - 20;
-    reposition = true;
-  }
-
-  if (reposition) {
-    win.setPosition(Math.round(x), Math.round(y));
-  }
+let win, mode = 'full', pinned = true, bounds = {}, quitting = false, closePending = false, allowClose = false;
+let moveTimer;
+const file = name => path.join(app.getPath('userData'), name);
+function readJSON(name) {
+  const target = file(name);
+  if (!fs.existsSync(target)) return null;
+  return JSON.parse(fs.readFileSync(target, 'utf8'));
 }
-
-function createWindow() {
-  mainWindow = new BrowserWindow({
-    width: SIZES.full.width,
-    height: SIZES.full.height,
-    minWidth: SIZES.full.minWidth,
-    minHeight: SIZES.full.minHeight,
-    frame: false, // Custom titlebar cho giao diện hiện đại
-    backgroundColor: '#090d16',
-    show: false,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      devTools: process.env.NODE_ENV === 'development',
-    },
+function atomicWrite(name, data) {
+  const target = file(name), temp = target + '.tmp';
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(temp, JSON.stringify(data, null, 2), 'utf8');
+  fs.renameSync(temp, target);
+}
+function allowedURL(value) {
+  try {
+    const url = new URL(value);
+    if (isDev) return url.origin === DEV_URL && url.pathname === '/';
+    url.hash = ''; url.search = '';
+    return url.href === indexURL;
+  } catch { return false; }
+}
+function trusted(event) {
+  return win && !win.isDestroyed() && event.sender === win.webContents &&
+    event.senderFrame === win.webContents.mainFrame && allowedURL(event.senderFrame.url);
+}
+function snapshot() { return { mode, pinned, alwaysOnTop: !!win?.isAlwaysOnTop() }; }
+function broadcast() {
+  if (win && !win.isDestroyed()) win.webContents.send('window:state', snapshot());
+}
+function remember() {
+  if (!win || win.isDestroyed()) return;
+  bounds[mode] = win.getBounds();
+  try { atomicWrite('flow_window_state.json', { mode, pinned, bounds }); }
+  catch (error) { console.error('Không thể lưu vị trí cửa sổ:', error.message); }
+}
+function clampWindow() {
+  if (!win || win.isDestroyed()) return;
+  const area = screen.getDisplayMatching(win.getBounds()).workArea;
+  const size = SIZES[mode];
+  win.setMinimumSize(Math.min(size.minWidth, area.width), Math.min(size.minHeight, area.height));
+  win.setBounds(fitBounds(win.getBounds(), area, size));
+}
+function setWindowMode(nextMode) {
+  if (!Object.hasOwn(SIZES, nextMode)) throw new Error('Chế độ cửa sổ không hợp lệ.');
+  if (!win || win.isDestroyed()) throw new Error('Cửa sổ đã đóng.');
+  if (nextMode !== mode) {
+    bounds[mode] = win.getBounds();
+    const old = win.getBounds();
+    mode = nextMode;
+    const size = SIZES[mode];
+    const proposed = bounds[mode] || { ...old, width: size.width, height: size.height };
+    const area = screen.getDisplayMatching(proposed).workArea;
+    win.setResizable(true);
+    win.setMinimumSize(Math.min(size.minWidth, area.width), Math.min(size.minHeight, area.height));
+    win.setBounds(fitBounds(proposed, area, size));
+    win.setResizable(mode === 'full');
+  }
+  win.setAlwaysOnTop(mode !== 'full' && pinned);
+  remember(); broadcast();
+  return { success: true, ...snapshot() };
+}
+function handle(channel, fn) {
+  ipcMain.handle(channel, (event, ...args) => {
+    if (!trusted(event)) throw new Error('Nguồn yêu cầu không hợp lệ.');
+    return fn(...args);
   });
-
-  // Chặn điều hướng ngoài ý muốn và mở liên kết ngoài an toàn
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https:') || url.startsWith('http:')) {
-      shell.openExternal(url);
+}
+handle('window:get-state', snapshot);
+handle('window:set-mode', setWindowMode);
+handle('window:set-always-on-top', value => {
+  if (typeof value !== 'boolean') throw new Error('Trạng thái ghim không hợp lệ.');
+  pinned = value;
+  win.setAlwaysOnTop(mode !== 'full' && pinned);
+  remember(); broadcast();
+  return { success: true, ...snapshot() };
+});
+handle('window:snap-corner', corner => {
+  const current = win.getBounds();
+  const area = screen.getDisplayMatching(current).workArea;
+  win.setBounds(cornerBounds(current, area, corner)); remember();
+  return { success: true };
+});
+handle('storage:load', () => {
+  try { return { success: true, data: readJSON('flow_timer_data.json') }; }
+  catch (error) { return { success: false, error: `Không đọc được dữ liệu đã lưu: ${error.message}` }; }
+});
+handle('storage:save', data => {
+  try {
+    if (!data || !Array.isArray(data.tasks) || data.version !== 1) throw new Error('Dữ liệu không hợp lệ.');
+    const serialized = JSON.stringify(data);
+    if (Buffer.byteLength(serialized) > 5 * 1024 * 1024) throw new Error('Dữ liệu quá lớn.');
+    atomicWrite('flow_timer_data.json', data);
+    return { success: true };
+  } catch (error) { return { success: false, error: error.message }; }
+});
+handle('notification:send', ({ title, body } = {}) => {
+  if (!Notification.isSupported()) return false;
+  new Notification({ title: String(title || 'Flow').slice(0, 120), body: String(body || '').slice(0, 500), silent: true }).show();
+  return true;
+});
+ipcMain.on('window:minimize', event => { if (trusted(event)) win.minimize(); });
+ipcMain.on('window:close', event => { if (trusted(event)) win.close(); });
+ipcMain.on('window:close-ready', (event, success) => {
+  if (!trusted(event) || !closePending) return;
+  closePending = false;
+  if (success !== true) { quitting = false; return; }
+  allowClose = true; remember(); win.close();
+});
+function createWindow() {
+  try {
+    const saved = readJSON('flow_window_state.json');
+    if (saved) {
+      mode = Object.hasOwn(SIZES, saved.mode) ? saved.mode : 'full';
+      pinned = saved.pinned !== false;
+      bounds = saved.bounds && typeof saved.bounds === 'object' ? saved.bounds : {};
     }
+  } catch { /* Window placement can be recovered without modifying timer data. */ }
+  const size = SIZES[mode];
+  const proposed = bounds[mode] || size;
+  const area = Number.isFinite(proposed.x) && Number.isFinite(proposed.y)
+    ? screen.getDisplayNearestPoint({ x: proposed.x, y: proposed.y }).workArea : screen.getPrimaryDisplay().workArea;
+  win = new BrowserWindow({ ...fitBounds(proposed, area, size),
+    minWidth: Math.min(size.minWidth, area.width), minHeight: Math.min(size.minHeight, area.height),
+    frame: false, resizable: mode === 'full', backgroundColor: '#141815', show: false,
+    alwaysOnTop: mode !== 'full' && pinned,
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true,
+      nodeIntegration: false, sandbox: true, devTools: isDev } });
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    try { if (new URL(url).protocol === 'https:') shell.openExternal(url).catch(console.error); } catch {}
     return { action: 'deny' };
   });
-
-  mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith('http://localhost:3000') && !url.startsWith('file://')) {
-      event.preventDefault();
-      shell.openExternal(url);
-    }
+  win.webContents.on('will-navigate', (event, url) => { if (!allowedURL(url)) event.preventDefault(); });
+  win.once('ready-to-show', () => { win.show(); clampWindow(); });
+  win.webContents.on('did-finish-load', broadcast);
+  win.on('move', () => { clearTimeout(moveTimer); moveTimer = setTimeout(remember, 200); });
+  win.on('resize', () => { clearTimeout(moveTimer); moveTimer = setTimeout(remember, 200); });
+  win.on('close', event => {
+    if (allowClose) return;
+    event.preventDefault();
+    if (mode !== 'full' && !quitting) { setWindowMode('full'); return; }
+    if (closePending) return;
+    closePending = true;
+    win.webContents.send('window:before-close');
+    // Do not silently throw away unsaved work when the renderer is unresponsive.
+    setTimeout(async () => {
+      if (!closePending || !win || win.isDestroyed()) return;
+      const { response } = await dialog.showMessageBox(win, { type: 'warning',
+        message: 'Ứng dụng chưa xác nhận lưu dữ liệu.', buttons: ['Tiếp tục chờ', 'Thoát ngay'], defaultId: 0, cancelId: 0 });
+      if (response === 1) { allowClose = true; remember(); win.close(); }
+      else { closePending = false; quitting = false; }
+    }, 6000);
   });
-
-  // Tải giao diện
-  const isDev = process.env.NODE_ENV === 'development';
-  if (isDev) {
-    mainWindow.loadURL('http://localhost:3000');
-  } else {
-    // Bản đóng gói / static export
-    const indexPath = path.join(__dirname, '../out/index.html');
-    if (fs.existsSync(indexPath)) {
-      mainWindow.loadFile(indexPath);
-    } else {
-      mainWindow.loadURL('http://localhost:3000');
-    }
-  }
-
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-    ensureWindowVisible(mainWindow);
-  });
-
-  mainWindow.on('close', (event) => {
-    // Nếu đang ở mini mode mà người dùng bấm đóng, trở lại full window
-    if (currentMode !== 'full') {
-      event.preventDefault();
-      setWindowMode('full');
-    }
-  });
-
-  // Lắng nghe sự kiện màn hình thay đổi (tháo màn phụ, đổi độ phân giải)
-  screen.on('display-removed', () => ensureWindowVisible(mainWindow));
-  screen.on('display-metrics-changed', () => ensureWindowVisible(mainWindow));
+  win.on('closed', () => { clearTimeout(moveTimer); win = null; });
+  if (isDev) win.loadURL(DEV_URL).catch(error => dialog.showErrorBox('Không mở được Flow', error.message));
+  else if (fs.existsSync(indexPath)) win.loadFile(indexPath);
+  else { dialog.showErrorBox('Chưa có bản build', 'Chạy npm run build trước npm start; hoặc npm run electron:dev để phát triển.'); allowClose = true; app.quit(); }
 }
-
-/**
- * Chuyển đổi giữa chế độ đầy đủ và chế độ mini
- */
-function setWindowMode(mode) {
-  if (!mainWindow || mainWindow.isDestroyed()) return { success: false };
-
-  const targetSize = SIZES[mode] || SIZES.full;
-
-  if (currentMode === 'full' && mode !== 'full') {
-    // Lưu lại vị trí và kích thước full trước khi thu nhỏ
-    savedFullBounds = mainWindow.getBounds();
-  }
-
-  currentMode = mode;
-
-  if (mode === 'full') {
-    mainWindow.setResizable(true);
-    mainWindow.setMinimumSize(SIZES.full.minWidth, SIZES.full.minHeight);
-    mainWindow.setBounds({
-      x: savedFullBounds.x || undefined,
-      y: savedFullBounds.y || undefined,
-      width: Math.max(SIZES.full.minWidth, savedFullBounds.width || SIZES.full.width),
-      height: Math.max(SIZES.full.minHeight, savedFullBounds.height || SIZES.full.height),
-    });
-    mainWindow.setAlwaysOnTop(false);
-  } else {
-    // Chế độ Mini (Card hoặc Bar)
-    mainWindow.setResizable(false);
-    mainWindow.setMinimumSize(targetSize.minWidth, targetSize.minHeight);
-    mainWindow.setSize(targetSize.width, targetSize.height);
-
-    // Ở chế độ mini, mặc định ghim trên cùng
-    mainWindow.setAlwaysOnTop(true, 'screen-saver');
-  }
-
-  ensureWindowVisible(mainWindow);
-  return { success: true, mode };
-}
-
-/**
- * Ghim cửa sổ vào một trong 4 góc màn hình (tránh taskbar)
- */
-function snapToCorner(corner) {
-  if (!mainWindow || mainWindow.isDestroyed()) return false;
-
-  const winBounds = mainWindow.getBounds();
-  const currentDisplay = screen.getDisplayNearestPoint({ x: winBounds.x, y: winBounds.y });
-  const workArea = currentDisplay.workArea; // Vùng làm việc tránh Taskbar của Windows
-
-  const margin = 20;
-  let targetX = workArea.x + margin;
-  let targetY = workArea.y + margin;
-
-  switch (corner) {
-    case 'top-left':
-      targetX = workArea.x + margin;
-      targetY = workArea.y + margin;
-      break;
-    case 'top-right':
-      targetX = workArea.x + workArea.width - winBounds.width - margin;
-      targetY = workArea.y + margin;
-      break;
-    case 'bottom-left':
-      targetX = workArea.x + margin;
-      targetY = workArea.y + workArea.height - winBounds.height - margin;
-      break;
-    case 'bottom-right':
-      targetX = workArea.x + workArea.width - winBounds.width - margin;
-      targetY = workArea.y + workArea.height - winBounds.height - margin;
-      break;
-    default:
-      return false;
-  }
-
-  mainWindow.setPosition(Math.round(targetX), Math.round(targetY));
-  return true;
-}
-
-// ================= IPC HANDLERS =================
-ipcMain.handle('window:set-mode', (event, mode) => {
-  return setWindowMode(mode);
-});
-
-ipcMain.handle('window:set-always-on-top', (event, pinned) => {
-  if (!mainWindow || mainWindow.isDestroyed()) return false;
-  isAlwaysOnTop = !!pinned;
-  mainWindow.setAlwaysOnTop(isAlwaysOnTop, isAlwaysOnTop ? 'screen-saver' : 'normal');
-  return isAlwaysOnTop;
-});
-
-ipcMain.handle('window:snap-corner', (event, corner) => {
-  return snapToCorner(corner);
-});
-
-ipcMain.on('window:minimize', () => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.minimize();
-  }
-});
-
-ipcMain.on('window:close', () => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.close();
-  }
-});
-
-// Lưu dữ liệu vào file userData
-ipcMain.handle('storage:save', async (event, data) => {
-  try {
-    const filePath = getDataFilePath();
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
-    return { success: true };
-  } catch (err) {
-    console.error('[Electron Storage] Không thể lưu file:', err);
-    return { success: false, error: err.message };
-  }
-});
-
-// Đọc dữ liệu từ file userData
-ipcMain.handle('storage:load', async () => {
-  try {
-    const filePath = getDataFilePath();
-    if (fs.existsSync(filePath)) {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      return JSON.parse(content);
-    }
-  } catch (err) {
-    console.error('[Electron Storage] Không thể đọc file:', err);
-  }
-  return null;
-});
-
-// Thông báo hệ thống
-ipcMain.on('notification:send', (event, { title, body }) => {
-  if (Notification.isSupported()) {
-    new Notification({
-      title: title || 'Flow Timer',
-      body: body || 'Đã hoàn thành mục tiêu tập trung!',
-      silent: true, // Tránh tiếng ding của Windows vì app đã phát Web Audio chime
-    }).show();
-  }
-});
-
-app.whenReady().then(() => {
-  createWindow();
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
+if (!app.requestSingleInstanceLock()) app.quit();
+else {
+  app.on('second-instance', () => { if (win) { win.restore(); win.show(); win.focus(); } });
+  app.whenReady().then(() => {
+    createWindow();
+    screen.on('display-removed', clampWindow);
+    screen.on('display-metrics-changed', clampWindow);
+    app.on('activate', () => { if (!win) { allowClose = false; quitting = false; createWindow(); } });
   });
-});
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
+  app.on('before-quit', () => { quitting = true; });
+  app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+}

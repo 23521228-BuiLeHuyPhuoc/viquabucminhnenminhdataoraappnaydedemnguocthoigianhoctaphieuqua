@@ -1,143 +1,53 @@
-/**
- * Storage adapter - Quản lý lưu trữ và khôi phục dữ liệu
- * Hỗ trợ:
- * - Schema versioning
- * - Tự động fallback khi dữ liệu cũ hoặc lỗi định dạng
- * - Lưu qua Electron IPC nếu chạy desktop, hoặc localStorage nếu chạy web
- * - Debounced save để tránh ghi đĩa liên tục mỗi tick
- */
-
-import { DEFAULT_TASKS, getTodayDateString } from './timer-engine.js';
-
+import { DEFAULT_TASKS, getTodayDateString, generateSessionId } from './timer-engine.js';
 export const SCHEMA_VERSION = 1;
-const STORAGE_KEY = 'flow_timer_app_data_v1';
-
+export const STORAGE_KEY = 'flow_timer_app_data_v1';
 export const DEFAULT_STATE = {
-  version: SCHEMA_VERSION,
-  date: getTodayDateString(),
-  tasks: DEFAULT_TASKS,
-  selectedTaskId: 'english',
-  theme: 'dark', // 'dark' | 'light'
-  soundEnabled: true,
-  desktopNotifications: false,
-  reducedMotion: false,
-  miniDisplayMode: 'card', // 'card' | 'bar'
-  isPinned: true, // Always on top in mini mode
-  handledSessionIds: [], // Session IDs đã kích hoạt chuông hoàn thành
-  todayFocusSeconds: {}, // { [taskId]: seconds }
+  version: SCHEMA_VERSION, tasks: DEFAULT_TASKS, selectedTaskId: 'english', theme: 'dark',
+  soundEnabled: true, desktopNotifications: false, reducedMotion: false,
+  miniDisplayMode: 'card', isPinned: true, handledSessionIds: [], visualMode: 'ring',
 };
-
-/**
- * Xác thực và chuẩn hóa dữ liệu đã lưu
- */
+const text = (value, fallback, max = 100) => typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : fallback;
+const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 export function sanitizeLoadedState(raw) {
-  if (!raw || typeof raw !== 'object') {
-    return { ...DEFAULT_STATE, date: getTodayDateString() };
-  }
-
-  const currentDate = getTodayDateString();
-  const stateDate = raw.date || currentDate;
-
-  // Đảm bảo tasks là mảng hợp lệ
-  let tasks = Array.isArray(raw.tasks) && raw.tasks.length > 0 ? raw.tasks : DEFAULT_TASKS;
-
-  // Chuẩn hóa từng task
-  tasks = tasks.map(t => ({
-    id: String(t.id || `task_${Math.random().toString(36).slice(2, 7)}`),
-    name: String(t.name || 'Công việc'),
-    emoji: String(t.emoji || '⏱'),
-    color: String(t.color || '#60a5fa'),
-    goal: typeof t.goal === 'number' && t.goal > 0 ? t.goal : 25 * 60,
-    left: typeof t.left === 'number' ? Math.max(0, Math.min(t.left, t.goal || 25 * 60)) : (t.goal || 25 * 60),
-    runStart: typeof t.runStart === 'number' ? t.runStart : null,
-    endAt: typeof t.endAt === 'number' ? t.endAt : null,
-    sessionId: t.sessionId || null,
-  }));
-
-  // Tìm selectedTaskId hợp lệ
-  let selectedTaskId = raw.selectedTaskId;
-  if (!tasks.some(t => t.id === selectedTaskId)) {
-    selectedTaskId = tasks[0]?.id || 'english';
-  }
-
-  return {
-    version: SCHEMA_VERSION,
-    date: stateDate,
-    tasks,
-    selectedTaskId,
-    theme: raw.theme === 'light' ? 'light' : 'dark',
-    soundEnabled: raw.soundEnabled !== false,
-    desktopNotifications: !!raw.desktopNotifications,
-    reducedMotion: !!raw.reducedMotion,
-    miniDisplayMode: raw.miniDisplayMode === 'bar' ? 'bar' : 'card',
-    isPinned: raw.isPinned !== false,
-    handledSessionIds: Array.isArray(raw.handledSessionIds) ? raw.handledSessionIds.slice(-200) : [],
-    todayFocusSeconds: (typeof raw.todayFocusSeconds === 'object' && raw.todayFocusSeconds !== null)
-      ? raw.todayFocusSeconds
-      : {},
-  };
+  raw = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const ids = new Set();
+  const tasks = (Array.isArray(raw.tasks) ? raw.tasks : DEFAULT_TASKS).map((value, i) => {
+    const t = value && typeof value === 'object' ? value : {};
+    let id = text(t.id, `task_recovered_${i}`);
+    while (ids.has(id)) id += '_copy';
+    ids.add(id);
+    const goal = Number.isFinite(t.goal) && t.goal >= 1 ? clamp(t.goal, 1, 86400) : 1500;
+    const left = Number.isFinite(t.left) ? clamp(t.left, 0, goal) : goal;
+    const runStart = Number.isFinite(t.runStart) && t.runStart >= 0 ? t.runStart : null;
+    return { ...t, id, name: text(t.name, 'Công việc'), emoji: text(t.emoji, '◷', 12),
+      color: /^#[0-9a-f]{6}$/i.test(t.color) ? t.color : '#a8c58a', goal, left, runStart,
+      endAt: runStart !== null ? (Number.isFinite(t.endAt) ? t.endAt : runStart + left * 1000) : null,
+      sessionId: text(t.sessionId, runStart !== null ? generateSessionId() : null) };
+  });
+  return { ...raw, version: SCHEMA_VERSION, date: text(raw.date, getTodayDateString()), tasks,
+    selectedTaskId: ids.has(raw.selectedTaskId) ? raw.selectedTaskId : tasks[0]?.id ?? null,
+    theme: raw.theme === 'light' ? 'light' : 'dark', soundEnabled: raw.soundEnabled !== false,
+    desktopNotifications: raw.desktopNotifications === true, reducedMotion: raw.reducedMotion === true,
+    miniDisplayMode: raw.miniDisplayMode === 'bar' ? 'bar' : 'card', isPinned: raw.isPinned !== false,
+    visualMode: raw.visualMode === 'hourglass' ? 'hourglass' : 'ring',
+    handledSessionIds: Array.isArray(raw.handledSessionIds) ? raw.handledSessionIds.filter(x => typeof x === 'string').slice(-500) : [] };
 }
-
-/**
- * Tải dữ liệu từ LocalStorage hoặc Electron API
- */
 export async function loadPersistedState() {
-  try {
-    // Nếu có Electron API
-    if (typeof window !== 'undefined' && window.electronAPI && typeof window.electronAPI.loadData === 'function') {
-      const electronData = await window.electronAPI.loadData();
-      if (electronData) {
-        return sanitizeLoadedState(electronData);
-      }
-    }
-
-    // Nếu chạy Web / fallback LocalStorage
-    if (typeof window !== 'undefined' && window.localStorage) {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        return sanitizeLoadedState(parsed);
-      }
-    }
-  } catch (err) {
-    console.warn('[Storage] Không thể đọc dữ liệu đã lưu, sử dụng mặc định:', err);
+  if (typeof window === 'undefined') return sanitizeLoadedState(null);
+  if (window.electronAPI) {
+    const result = await window.electronAPI.loadData();
+    if (result?.success === false) throw new Error(result.error || 'Không thể đọc dữ liệu.');
+    return sanitizeLoadedState(result?.success === true ? result.data : result);
   }
-
-  return { ...DEFAULT_STATE, date: getTodayDateString() };
+  const value = window.localStorage.getItem(STORAGE_KEY);
+  return sanitizeLoadedState(value ? JSON.parse(value) : null);
 }
-
-let saveTimeout = null;
-
-/**
- * Lưu dữ liệu với debounce để tránh spam đĩa/storage
- */
-export function savePersistedState(state, immediate = false) {
+// Each mutation is persisted immediately. No trailing debounce that can lose the last action.
+export async function savePersistedState(state) {
   if (typeof window === 'undefined') return;
-
-  const doSave = () => {
-    try {
-      const sanitized = sanitizeLoadedState(state);
-      const serialized = JSON.stringify(sanitized);
-
-      // Lưu qua localStorage
-      if (window.localStorage) {
-        localStorage.setItem(STORAGE_KEY, serialized);
-      }
-
-      // Lưu qua Electron
-      if (window.electronAPI && typeof window.electronAPI.saveData === 'function') {
-        window.electronAPI.saveData(sanitized);
-      }
-    } catch (err) {
-      console.error('[Storage] Lỗi khi lưu trạng thái:', err);
-    }
-  };
-
-  if (immediate) {
-    if (saveTimeout) clearTimeout(saveTimeout);
-    doSave();
-  } else {
-    if (saveTimeout) clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(doSave, 800); // 800ms debounce
-  }
+  const data = sanitizeLoadedState(state);
+  if (window.electronAPI) {
+    const result = await window.electronAPI.saveData(data);
+    if (!result?.success) throw new Error(result?.error || 'Không thể lưu dữ liệu.');
+  } else window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }

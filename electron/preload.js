@@ -1,27 +1,20 @@
 const { contextBridge, ipcRenderer } = require('electron');
-
+const subscribe = (channel, callback) => {
+  const listener = (_event, data) => callback(data);
+  ipcRenderer.on(channel, listener);
+  return () => ipcRenderer.removeListener(channel, listener);
+};
 contextBridge.exposeInMainWorld('electronAPI', {
-  // Điều khiển chế độ kích thước cửa sổ
-  setWindowMode: (mode) => ipcRenderer.invoke('window:set-mode', mode),
-
-  // Ghim cửa sổ trên cùng (Always on top)
-  setAlwaysOnTop: (pinned) => ipcRenderer.invoke('window:set-always-on-top', pinned),
-
-  // Ghim nhanh vào 4 góc màn hình
-  snapToCorner: (corner) => ipcRenderer.invoke('window:snap-corner', corner),
-
-  // Thu nhỏ cửa sổ
+  getWindowState: () => ipcRenderer.invoke('window:get-state'),
+  onWindowState: callback => subscribe('window:state', callback),
+  onBeforeClose: callback => subscribe('window:before-close', callback),
+  confirmClose: success => ipcRenderer.send('window:close-ready', success),
+  setWindowMode: mode => ipcRenderer.invoke('window:set-mode', mode),
+  setAlwaysOnTop: pinned => ipcRenderer.invoke('window:set-always-on-top', pinned),
+  snapToCorner: corner => ipcRenderer.invoke('window:snap-corner', corner),
   minimize: () => ipcRenderer.send('window:minimize'),
-
-  // Đóng cửa sổ
   close: () => ipcRenderer.send('window:close'),
-
-  // Lưu trữ dữ liệu vào AppData an toàn
-  saveData: (data) => ipcRenderer.invoke('storage:save', data),
-
-  // Đọc dữ liệu từ AppData
+  saveData: data => ipcRenderer.invoke('storage:save', data),
   loadData: () => ipcRenderer.invoke('storage:load'),
-
-  // Gửi thông báo desktop
-  notify: (title, body) => ipcRenderer.send('notification:send', { title, body }),
+  notify: (title, body) => ipcRenderer.invoke('notification:send', { title, body }),
 });

@@ -5,13 +5,13 @@
   "description": "Flow Timer - Ứng dụng đếm ngược học tập & làm việc với đồng hồ nổi Desktop",
   "main": "electron/main.js",
   "scripts": {
-    "dev": "node node_modules/next/dist/bin/next dev",
-    "build": "node node_modules/next/dist/bin/next build",
-    "start": "node node_modules/next/dist/bin/next start",
-    "test": "node --test test/**/*.test.mjs",
-    "electron:dev": "node node_modules/concurrently/dist/bin/concurrently.js -k \"node node_modules/next/dist/bin/next dev\" \"node node_modules/wait-on/bin/wait-on tcp:3000 && node node_modules/electron/cli.js .\"",
-    "electron:start": "node node_modules/electron/cli.js .",
-    "dist": "node node_modules/next/dist/bin/next build && electron-builder"
+    "dev": "next dev --hostname 127.0.0.1",
+    "build": "next build",
+    "start": "electron . --production",
+    "test": "node --test test/*.test.mjs",
+    "electron:dev": "concurrently -k \"next dev --hostname 127.0.0.1\" \"wait-on http://127.0.0.1:3000 && electron . --dev\"",
+    "electron:start": "electron . --production",
+    "dist": "next build && electron-builder"
   },
   "keywords": [
     "timer",
