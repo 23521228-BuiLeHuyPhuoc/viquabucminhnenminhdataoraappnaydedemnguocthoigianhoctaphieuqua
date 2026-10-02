@@ -1,3 +1,5 @@
+@import url('https://fonts.cdnfonts.com/css/google-sans');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -43,15 +45,23 @@ body,
   min-height: 100%;
   width: 100%;
   overflow: hidden;
+  font-family: 'Google Sans', 'Product Sans', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: 'Google Sans', 'Product Sans', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background: var(--bg);
   color: var(--text);
   font-size: 14px;
   line-height: 1.5;
   transition: background-color 0.6s ease, color 0.4s ease;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: 'Google Sans', 'Product Sans', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 button,
@@ -2661,6 +2671,415 @@ kbd {
   0%, 100% { opacity: 0.8; transform: scale(1); }
   50% { opacity: 1; transform: scale(1.2); }
 }
+
+/* ==========================================================================
+   AESTHETIC PIP ENHANCEMENTS: CANVAS SNOW, MINI HOURGLASS, NEON RING, GLOW
+   ========================================================================== */
+
+.ambient-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.pip-header-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.pip-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pip-tool-btn:hover {
+  background: var(--raised);
+  color: var(--text);
+}
+
+.pip-tool-btn.active {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+}
+
+.tool-label {
+  font-size: 9px;
+  font-weight: 500;
+}
+
+.pip-visual-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px;
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  margin: 3px 0 2px 0;
+  width: fit-content;
+}
+
+.visual-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.visual-pill:hover {
+  color: var(--text);
+  background: var(--raised);
+}
+
+.visual-pill.active {
+  background: var(--raised);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.pip-display-flex {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Mini Hourglass in PiP */
+.pip-hourglass-wrap {
+  width: 38px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 8px color-mix(in srgb, var(--accent) 35%, transparent));
+}
+
+.pip-hourglass-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.pip-sand-stream {
+  animation: sand-flow 0.5s linear infinite;
+}
+
+@keyframes sand-flow {
+  0% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -10; }
+}
+
+/* Mini Ring in PiP */
+.pip-ring-wrap {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.pip-ring-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.ring-track {
+  fill: none;
+  stroke: var(--track);
+  stroke-width: 7;
+}
+
+.ring-progress {
+  fill: none;
+  stroke-width: 7;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s linear;
+  filter: drop-shadow(0 0 6px var(--accent));
+}
+
+/* Radiant glow on digits when running */
+.pip-digits.running,
+.pip-digits-bar.running {
+  color: var(--text);
+  text-shadow:
+    0 0 12px color-mix(in srgb, var(--accent) 60%, transparent),
+    0 0 28px color-mix(in srgb, var(--accent) 25%, transparent);
+  animation: digit-glow 3s infinite ease-in-out;
+}
+
+@keyframes digit-glow {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.22); }
+}
+
+.pulse-btn {
+  animation: btn-pulse 2s infinite ease-in-out;
+}
+
+@keyframes btn-pulse {
+  0%, 100% {
+    box-shadow: 0 3px 12px color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  50% {
+    box-shadow: 0 4px 20px color-mix(in srgb, var(--accent) 65%, transparent);
+  }
+}
+
+/* ==========================================================================
+   LUMINOUS FROSTED GLASS QUOTE CAPSULE (PIP & MAIN APP)
+   Ultra-aesthetic glassmorphic island with dreamy glowing typography,
+   shimmer sweep, breathing aurora glow, and smooth blur-slide dissolve.
+   ========================================================================== */
+
+.pip-quote-capsule,
+.flow-quote-capsule {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 6px 10px;
+  margin: 4px 0 5px 0;
+  border-radius: 999px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.09) 0%,
+    rgba(255, 255, 255, 0.03) 50%,
+    rgba(0, 0, 0, 0.25) 100%
+  );
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, rgba(255, 255, 255, 0.16));
+  box-shadow:
+    0 6px 24px -2px rgba(0, 0, 0, 0.42),
+    0 0 16px -2px color-mix(in srgb, var(--accent) 26%, transparent),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.22);
+  cursor: pointer;
+  overflow: hidden;
+  user-select: none;
+  max-width: 100%;
+  animation: quote-aurora-breathe 4s infinite ease-in-out;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              background 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.flow-quote-capsule {
+  margin: 6px auto 10px auto;
+  max-width: 580px;
+  width: fit-content;
+  padding: 7px 18px 8px 14px;
+}
+
+@keyframes quote-aurora-breathe {
+  0%, 100% {
+    border-color: color-mix(in srgb, var(--accent) 24%, rgba(255, 255, 255, 0.14));
+    box-shadow:
+      0 6px 24px -2px rgba(0, 0, 0, 0.42),
+      0 0 14px -3px color-mix(in srgb, var(--accent) 22%, transparent),
+      inset 0 1px 1px 0 rgba(255, 255, 255, 0.2);
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--accent) 48%, rgba(255, 255, 255, 0.22));
+    box-shadow:
+      0 8px 30px -2px rgba(0, 0, 0, 0.48),
+      0 0 24px 0px color-mix(in srgb, var(--accent) 38%, transparent),
+      inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.3);
+  }
+}
+
+.pip-quote-capsule:hover,
+.flow-quote-capsule:hover {
+  transform: translateY(-1.5px) scale(1.01);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0.05) 50%,
+    rgba(0, 0, 0, 0.2) 100%
+  );
+  border-color: color-mix(in srgb, var(--accent) 60%, rgba(255, 255, 255, 0.3));
+  box-shadow:
+    0 10px 32px rgba(0, 0, 0, 0.5),
+    0 0 26px color-mix(in srgb, var(--accent) 45%, transparent),
+    inset 0 1px 2px rgba(255, 255, 255, 0.35);
+}
+
+.pip-quote-capsule:active,
+.flow-quote-capsule:active {
+  transform: scale(0.98);
+}
+
+/* Diagonal Specular Shimmer Light Sweep */
+.quote-shimmer-sweep {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -140%;
+  width: 55%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.04) 20%,
+    rgba(255, 255, 255, 0.24) 50%,
+    rgba(255, 255, 255, 0.04) 80%,
+    transparent 100%
+  );
+  transform: skewX(-25deg);
+  animation: quote-shine-sweep 5.5s infinite ease-in-out;
+  pointer-events: none;
+}
+
+@keyframes quote-shine-sweep {
+  0% { left: -140%; opacity: 0; }
+  10% { opacity: 1; }
+  45%, 100% { left: 240%; opacity: 0; }
+}
+
+/* Glowing Circular Icon Badge on the left */
+.quote-badge-glow {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--accent) 18%, rgba(255, 255, 255, 0.05));
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, rgba(255, 255, 255, 0.12));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 30%, transparent);
+  flex-shrink: 0;
+}
+
+.quote-sparkle {
+  color: var(--accent);
+  font-size: 10px;
+  filter: drop-shadow(0 0 6px var(--accent));
+  animation: quote-sparkle-spin 4s infinite ease-in-out;
+}
+
+@keyframes quote-sparkle-spin {
+  0%, 100% {
+    transform: rotate(0deg) scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: rotate(180deg) scale(1.18);
+    opacity: 1;
+    filter: drop-shadow(0 0 9px var(--accent));
+  }
+}
+
+/* Dreamy Frosted Typography ("chữ mờ mờ") */
+.quote-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+  transition: opacity 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+              filter 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pip-quote-capsule.fading .quote-content,
+.flow-quote-capsule.fading .quote-content {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.97);
+  filter: blur(8px);
+}
+
+.quote-text {
+  font-family: 'Google Sans', 'Product Sans', 'Plus Jakarta Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 450;
+  font-style: italic;
+  letter-spacing: -0.15px;
+  color: rgba(242, 246, 252, 0.88);
+  text-shadow:
+    0 0 12px rgba(255, 255, 255, 0.22),
+    0 1px 3px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flow-quote-capsule .quote-text {
+  font-size: 12.5px;
+}
+
+/* Luminous Author Tag Pill */
+.quote-author {
+  font-family: 'Google Sans', 'Product Sans', 'Plus Jakarta Sans', sans-serif;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--accent);
+  padding: 1.5px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 18%, rgba(255, 255, 255, 0.05));
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 25%, transparent);
+  flex-shrink: 0;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+.flow-quote-capsule .quote-author {
+  font-size: 10.5px;
+  padding: 2px 9px;
+}
+
+/* Progress indicator underline track */
+.quote-progress-track {
+  position: absolute;
+  bottom: 0;
+  left: 12px;
+  right: 12px;
+  height: 1.5px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 1px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.quote-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 30%, transparent),
+    var(--accent),
+    color-mix(in srgb, var(--accent) 50%, white)
+  );
+  box-shadow: 0 0 6px var(--accent);
+  animation: quote-progress-fill-anim 18s linear forwards;
+}
+
+@keyframes quote-progress-fill-anim {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
+
+
 
 
 

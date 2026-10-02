@@ -789,6 +789,11 @@ export default function FlowTimer() {
 
     win.document.title = 'Flow — Đồng hồ nổi';
 
+    const fontLink = win.document.createElement('link');
+    fontLink.rel = 'stylesheet';
+    fontLink.href = 'https://fonts.cdnfonts.com/css/google-sans';
+    win.document.head.appendChild(fontLink);
+
     // Traverse document.styleSheets
     Array.from(document.styleSheets).forEach(sheet => {
       try {
