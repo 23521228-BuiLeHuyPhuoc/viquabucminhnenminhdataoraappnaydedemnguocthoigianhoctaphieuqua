@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useId } from 'react';
+import { createPortal } from 'react-dom';
 import Head from 'next/head';
 import {
   ArrowUpRight,
@@ -14,6 +15,7 @@ import {
   Minus,
   Moon,
   Pause,
+  PictureInPicture2,
   Pin,
   PinOff,
   Play,
@@ -33,6 +35,7 @@ import { formatRemaining, formatDurationShort, parseDuration } from '../lib/time
 import { desktopBridge } from '../lib/desktop-bridge.js';
 import { playCompletionSound } from '../lib/sound.js';
 import AmbientBackground from './AmbientBackground';
+import PipFloatingTimer from './PipFloatingTimer';
 
 const STATUS = {
   idle: 'Sẵn sàng bắt đầu',
@@ -393,10 +396,9 @@ function TimerVisual({ fraction, status, mode, children }) {
 
 /**
  * MiniTimer - Floating desktop widget
- * True native frameless floating window with drag-regions, no-drag buttons,
- * fluid responsive resizing, quick task picker, expand button, and ambient atmosphere.
+ * Supports time adjustments (+5p, -5p), resizing, task switching, and controls.
  */
-function MiniTimer({ flow, task, desktop, visualState, onToggle, onReset }) {
+function MiniTimer({ flow, task, desktop, visualState, onToggle, onReset, onAdjustTime }) {
   const { state, now, windowState } = flow;
   const [corners, setCorners] = useState(false);
   const [taskPicker, setTaskPicker] = useState(false);
@@ -434,6 +436,7 @@ function MiniTimer({ flow, task, desktop, visualState, onToggle, onReset }) {
                 return (
                   <button
                     key={t.id}
+                    type="button"
                     className={`mini-task-item ${isSelected ? 'active' : ''}`}
                     onClick={() => {
                       flow.select(t.id);
@@ -473,6 +476,15 @@ function MiniTimer({ flow, task, desktop, visualState, onToggle, onReset }) {
             </div>
 
             <div className="mini-bar-actions no-drag">
+              <button
+                type="button"
+                className="adjust-pill"
+                onClick={() => onAdjustTime(task?.id, 300)}
+                title="Cộng 5 phút"
+              >
+                +5p
+              </button>
+
               <IconButton
                 title="Đặt lại phiên này"
                 className="mini-icon-btn"
@@ -620,6 +632,45 @@ function MiniTimer({ flow, task, desktop, visualState, onToggle, onReset }) {
               </div>
             </div>
 
+            {/* Quick time adjustment toolbar in Mini Card */}
+            <div className="mini-adjust-bar no-drag">
+              <span className="adjust-label">Chỉnh giờ:</span>
+              <div className="adjust-buttons">
+                <button
+                  type="button"
+                  className="adjust-pill"
+                  onClick={() => onAdjustTime(task?.id, -300)}
+                  title="Trừ 5 phút"
+                >
+                  -5p
+                </button>
+                <button
+                  type="button"
+                  className="adjust-pill"
+                  onClick={() => onAdjustTime(task?.id, -60)}
+                  title="Trừ 1 phút"
+                >
+                  -1p
+                </button>
+                <button
+                  type="button"
+                  className="adjust-pill plus"
+                  onClick={() => onAdjustTime(task?.id, 60)}
+                  title="Cộng 1 phút"
+                >
+                  +1p
+                </button>
+                <button
+                  type="button"
+                  className="adjust-pill plus"
+                  onClick={() => onAdjustTime(task?.id, 300)}
+                  title="Cộng 5 phút"
+                >
+                  +5p
+                </button>
+              </div>
+            </div>
+
             <div className="mini-progress drag-region">
               <span style={{ width: `${percent}%`, background: task?.color }} />
             </div>
@@ -681,6 +732,7 @@ export default function FlowTimer() {
   const [settings, setSettings] = useState(false);
   const [confirm, setConfirm] = useState(null);
   const [visualState, setVisualState] = useState('idle');
+  const [pipWindow, setPipWindow] = useState(null);
   const resetTimerRef = useRef(null);
 
   const desktop = typeof window !== 'undefined' && !!window.electronAPI;
@@ -693,8 +745,6 @@ export default function FlowTimer() {
   const status = getTaskStatus(selected, now);
   const fraction = selected ? Math.max(0, Math.min(1, left / selected.goal)) : 1;
   const reduce = state?.reducedMotion;
-
-  const openMini = () => flow.setMode(`mini-${state.miniDisplayMode}`);
 
   // Sync visualState with active timer status
   useEffect(() => {
@@ -727,6 +777,135 @@ export default function FlowTimer() {
     }, 600);
   }
 
+  function copyStylesToPiP(win) {
+    if (!win?.document) return;
+
+    if (!win.document.querySelector('meta[name="viewport"]')) {
+      const meta = win.document.createElement('meta');
+      meta.name = 'viewport';
+      meta.content = 'width=device-width, initial-scale=1';
+      win.document.head.appendChild(meta);
+    }
+
+    win.document.title = 'Flow — Đồng hồ nổi';
+
+    // Traverse document.styleSheets
+    Array.from(document.styleSheets).forEach(sheet => {
+      try {
+        if (sheet.cssRules) {
+          const style = win.document.createElement('style');
+          const rules = Array.from(sheet.cssRules)
+            .map(r => r.cssText)
+            .join('\n');
+          style.textContent = rules;
+          win.document.head.appendChild(style);
+          return;
+        }
+      } catch (e) {
+        // Cross-origin stylesheet access restriction
+      }
+
+      if (sheet.href) {
+        const link = win.document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = sheet.href;
+        if (sheet.media?.mediaText) link.media = sheet.media.mediaText;
+        if (sheet.type) link.type = sheet.type;
+        win.document.head.appendChild(link);
+      }
+    });
+
+    document.querySelectorAll('style').forEach(style => {
+      if (style.textContent && !win.document.head.innerHTML.includes(style.textContent.slice(0, 30))) {
+        const newStyle = win.document.createElement('style');
+        newStyle.textContent = style.textContent;
+        win.document.head.appendChild(newStyle);
+      }
+    });
+  }
+
+  // Document Picture-in-Picture for browser (always floating on screen when opening new tabs!)
+  async function togglePiP() {
+    if (pipWindow && !pipWindow.closed) {
+      try {
+        pipWindow.close();
+      } catch (e) {}
+      setPipWindow(null);
+      return;
+    }
+
+    // In Electron Desktop, switch window mode
+    if (desktop) {
+      flow.setMode(`mini-${state.miniDisplayMode}`);
+      return;
+    }
+
+    // In Browser: strictly require Document Picture-in-Picture API & Secure Context
+    if (typeof window === 'undefined') return;
+
+    const isSecure = window.isSecureContext;
+    const isPipSupported = 'documentPictureInPicture' in window;
+
+    if (!isPipSupported || !isSecure) {
+      const reason = !isSecure
+        ? 'Cửa sổ nổi PiP yêu cầu kết nối bảo mật (HTTPS hoặc localhost).'
+        : 'Trình duyệt hiện tại chưa hỗ trợ Document Picture-in-Picture. Vui lòng sử dụng Google Chrome hoặc Microsoft Edge (phiên bản 111 trở lên).';
+      flow.setNotice(reason);
+      return;
+    }
+
+    try {
+      if (window.documentPictureInPicture.window) {
+        try {
+          window.documentPictureInPicture.window.close();
+        } catch (e) {}
+      }
+
+      const win = await window.documentPictureInPicture.requestWindow({
+        width: 360,
+        height: 260,
+      });
+
+      copyStylesToPiP(win);
+
+      win.document.documentElement.dataset.theme = state?.theme || 'dark';
+      win.document.documentElement.dataset.motion = reduce ? 'reduce' : 'auto';
+      win.document.documentElement.style.setProperty('--accent', color);
+      win.document.body.style.margin = '0';
+      win.document.body.style.padding = '0';
+      win.document.body.style.width = '100vw';
+      win.document.body.style.height = '100vh';
+      win.document.body.style.overflow = 'hidden';
+      win.document.body.style.background = 'var(--bg, #111512)';
+
+      setPipWindow(win);
+
+      win.addEventListener('pagehide', () => {
+        setPipWindow(null);
+      });
+    } catch (err) {
+      let message = 'Không thể mở cửa sổ PiP.';
+      if (err.name === 'NotAllowedError') {
+        message = 'Yêu cầu mở PiP bị từ chối hoặc cần người dùng tương tác trực tiếp.';
+      } else if (err.name === 'NotSupportedError') {
+        message = 'Trình duyệt không hỗ trợ Document Picture-in-Picture.';
+      } else if (err.message) {
+        message = `Không thể mở PiP: ${err.message}`;
+      }
+      flow.setNotice(message);
+    }
+  }
+
+  // Update theme, reducedMotion and accent inside PiP window when changed
+  useEffect(() => {
+    if (!pipWindow || pipWindow.closed) return;
+    try {
+      pipWindow.document.documentElement.dataset.theme = state?.theme || 'dark';
+      pipWindow.document.documentElement.dataset.motion = reduce ? 'reduce' : 'auto';
+      pipWindow.document.documentElement.style.setProperty('--accent', color);
+    } catch (e) {}
+  }, [pipWindow, state?.theme, reduce, color]);
+
   useEffect(() => {
     document.documentElement.dataset.theme = state?.theme || 'dark';
     document.documentElement.dataset.motion = reduce ? 'reduce' : 'auto';
@@ -735,31 +914,53 @@ export default function FlowTimer() {
 
   useEffect(() => {
     if (!state) return;
-    const listener = event => {
-      if (
-        event.repeat ||
-        event.defaultPrevented ||
-        event.target.closest?.('input, textarea, select, button, [contenteditable="true"], dialog') ||
-        document.querySelector('dialog[open]')
-      ) {
-        return;
-      }
 
-      if (event.code === 'Space' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    const handleKeyDown = event => {
+      if (event.repeat || event.defaultPrevented) return;
+
+      const target = event.target;
+      const targetDoc = target?.ownerDocument || document;
+      const isInteractive =
+        target?.matches?.('input, textarea, select, button, [contenteditable="true"]') ||
+        target?.closest?.('input, textarea, select, button, [contenteditable="true"]') ||
+        target?.isContentEditable ||
+        Boolean(targetDoc.querySelector('dialog[open]'));
+
+      if (isInteractive) return;
+
+      if (event.code === 'Space' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
         event.preventDefault();
-        const target = isMini ? running || selected : selected;
-        if (target) handleToggle(target.id);
+        const targetTask = isMini ? running || selected : selected;
+        if (targetTask) handleToggle(targetTask.id);
+        return;
       }
 
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.code === 'KeyM') {
         event.preventDefault();
-        flow.setMode(isMini ? 'full' : `mini-${state.miniDisplayMode}`);
+        togglePiP();
+        return;
       }
     };
 
-    window.addEventListener('keydown', listener);
-    return () => window.removeEventListener('keydown', listener);
-  }, [state, isMini, selected, running, flow.setMode]);
+    window.addEventListener('keydown', handleKeyDown);
+
+    let cleanupPiP = null;
+    if (pipWindow && !pipWindow.closed) {
+      try {
+        pipWindow.addEventListener('keydown', handleKeyDown);
+        cleanupPiP = () => {
+          try {
+            pipWindow.removeEventListener('keydown', handleKeyDown);
+          } catch (e) {}
+        };
+      } catch (e) {}
+    }
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      cleanupPiP?.();
+    };
+  }, [state, isMini, selected, running, pipWindow]);
 
   useEffect(() => {
     if (!flow.notice) return;
@@ -797,6 +998,29 @@ export default function FlowTimer() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
+      {/* Render Document Picture-in-Picture window when active */}
+      {pipWindow &&
+        createPortal(
+          <PipFloatingTimer
+            flow={flow}
+            task={shown}
+            visualState={visualState}
+            onToggle={handleToggle}
+            onReset={handleReset}
+            onAdjustTime={flow.adjustTime}
+            onClose={() => {
+              pipWindow.close();
+              setPipWindow(null);
+            }}
+            onResize={(w, h) => {
+              try {
+                pipWindow.resizeTo(w, h);
+              } catch (e) {}
+            }}
+          />,
+          pipWindow.document.body
+        )}
+
       {isMini ? (
         <MiniTimer
           flow={flow}
@@ -805,6 +1029,7 @@ export default function FlowTimer() {
           visualState={visualState}
           onToggle={handleToggle}
           onReset={handleReset}
+          onAdjustTime={flow.adjustTime}
         />
       ) : (
         <div className="flow-app">
@@ -927,14 +1152,28 @@ export default function FlowTimer() {
                   <span className={`status-dot ${status}`} />
                   {selected ? STATUS[status] : 'KHÔNG GIAN TRỐNG'}
                 </span>
+
+                {/* PiP Button */}
                 <button
                   type="button"
-                  className="dock-button no-drag"
-                  onClick={openMini}
-                  title="Thu nhỏ thành cửa sổ nổi Desktop"
+                  className={`dock-button no-drag ${pipWindow ? 'active' : ''}`}
+                  onClick={togglePiP}
+                  title={
+                    desktop
+                      ? 'Thu nhỏ thành cửa sổ nổi Desktop'
+                      : pipWindow
+                      ? 'Đóng cửa sổ nổi PiP'
+                      : 'Mở cửa sổ nổi Picture-in-Picture (vẫn hiện khi mở tab mới)'
+                  }
                 >
-                  <LayoutPanelLeft size={16} />
-                  <span>{desktop ? 'Đồng hồ nổi Desktop' : 'Xem mini'}</span>
+                  <PictureInPicture2 size={16} />
+                  <span>
+                    {desktop
+                      ? 'Đồng hồ nổi Desktop'
+                      : pipWindow
+                      ? 'Đóng PiP'
+                      : 'Đồng hồ nổi (PiP)'}
+                  </span>
                   <ArrowUpRight size={14} />
                 </button>
               </div>
@@ -1016,6 +1255,43 @@ export default function FlowTimer() {
                     >
                       <SlidersHorizontal size={19} />
                     </IconButton>
+                  </div>
+
+                  {/* Quick time adjustment toolbar on Focus Panel */}
+                  <div className="focus-adjust-row no-drag">
+                    <span className="adjust-caption">Chỉnh nhanh thời gian:</span>
+                    <button
+                      type="button"
+                      className="adjust-pill"
+                      onClick={() => flow.adjustTime(selected.id, -300)}
+                      title="Trừ 5 phút"
+                    >
+                      -5p
+                    </button>
+                    <button
+                      type="button"
+                      className="adjust-pill"
+                      onClick={() => flow.adjustTime(selected.id, -60)}
+                      title="Trừ 1 phút"
+                    >
+                      -1p
+                    </button>
+                    <button
+                      type="button"
+                      className="adjust-pill plus"
+                      onClick={() => flow.adjustTime(selected.id, 60)}
+                      title="Cộng 1 phút"
+                    >
+                      +1p
+                    </button>
+                    <button
+                      type="button"
+                      className="adjust-pill plus"
+                      onClick={() => flow.adjustTime(selected.id, 300)}
+                      title="Cộng 5 phút"
+                    >
+                      +5p
+                    </button>
                   </div>
 
                   <p className="keyboard-hint">

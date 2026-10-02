@@ -2044,3 +2044,594 @@ kbd {
     transition: opacity 0.3s ease !important;
   }
 }
+
+/* ==========================================================================
+   TIME ADJUSTMENT BARS (FOCUS & MINI)
+   ========================================================================== */
+
+.focus-adjust-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.adjust-caption {
+  font-size: 11px;
+  color: var(--subtle);
+  margin-right: 4px;
+}
+
+.mini-adjust-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 5px 0 2px;
+  border-top: 1px solid var(--line);
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+.adjust-label {
+  font-size: 10px;
+  color: var(--subtle);
+  font-weight: 500;
+}
+
+.adjust-buttons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.adjust-pill {
+  font-size: 10px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.15s;
+}
+
+.adjust-pill:hover {
+  background: var(--raised);
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  transform: translateY(-1px);
+}
+
+.adjust-pill.plus {
+  color: color-mix(in srgb, var(--accent) 85%, var(--text));
+  font-weight: 550;
+}
+
+.adjust-pill.custom {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--text);
+}
+
+/* ==========================================================================
+   DOCUMENT PICTURE-IN-PICTURE (PIP) FLOATING STYLES
+   ========================================================================== */
+
+.pip-root {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--sidebar) 88%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  user-select: none;
+}
+
+/* Responsive Layout Variations */
+.pip-root.layout-bar {
+  padding: 6px 10px;
+  justify-content: space-between;
+}
+
+.pip-root.layout-large {
+  padding: 16px 20px;
+}
+
+.pip-bar-view {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  z-index: 5;
+}
+
+.pip-bar-center {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pip-digits-bar {
+  font-size: clamp(20px, 6.5vw, 28px);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -1px;
+  color: var(--text);
+}
+
+.pip-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.pip-bar-actions .adjust-pill {
+  padding: 2px 6px;
+  font-size: 10px;
+}
+
+.pip-bar-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+}
+
+.pip-bar-confirm .confirm-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pip-bar-confirm .confirm-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.pip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  position: relative;
+  z-index: 5;
+}
+
+.pip-task-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--surface) 75%, transparent);
+  border: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 550;
+  max-width: 140px;
+  color: var(--text);
+}
+
+.pip-task-chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.pip-task-chip .emoji {
+  font-size: 13px;
+}
+
+.pip-task-chip .name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pip-size-controls {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  gap: 2px;
+}
+
+.pip-size-controls.sm {
+  padding: 1px;
+}
+
+.pip-size-btn {
+  font-size: 9px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  color: var(--muted);
+}
+
+.pip-size-btn:hover,
+.pip-size-btn.active {
+  background: var(--raised);
+  color: var(--text);
+  font-weight: 550;
+}
+
+.pip-icon-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+.pip-icon-btn:hover {
+  background: var(--raised);
+  color: var(--text);
+}
+
+.pip-icon-btn.close-pip:hover {
+  background: rgba(220, 38, 38, 0.2);
+  color: #f87171;
+}
+
+.pip-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  position: relative;
+  z-index: 5;
+  margin: 4px 0;
+}
+
+.pip-root.layout-large .pip-body {
+  margin: 12px 0;
+}
+
+.pip-timer-display {
+  display: flex;
+  flex-direction: column;
+}
+
+.pip-digits {
+  font-size: clamp(26px, 8.5vw, 44px);
+  font-weight: 350;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -1.5px;
+  color: var(--text);
+}
+
+.pip-root.layout-large .pip-digits {
+  font-size: clamp(36px, 12vw, 56px);
+  letter-spacing: -2px;
+}
+
+.pip-status-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.pip-root.layout-large .pip-status-row {
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.pip-status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.pip-status-dot.running {
+  background: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.pip-main-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pip-reset-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  transition: transform 0.2s, color 0.2s;
+}
+
+.pip-reset-btn.sm {
+  width: 25px;
+  height: 25px;
+}
+
+.pip-reset-btn:hover:not(:disabled) {
+  color: var(--text);
+  transform: scale(1.05);
+}
+
+.pip-reset-btn:disabled,
+.pip-play-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.pip-play-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: #122013;
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--accent) 30%, transparent);
+  transition: transform 0.2s, filter 0.2s;
+}
+
+.pip-play-btn.sm {
+  width: 28px;
+  height: 28px;
+}
+
+.pip-root.layout-large .pip-play-btn {
+  width: 48px;
+  height: 48px;
+}
+
+.pip-play-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+  filter: brightness(1.1);
+}
+
+.pip-adjust-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  position: relative;
+  z-index: 5;
+  padding: 4px 0;
+  border-top: 1px solid var(--line);
+}
+
+.pip-root.layout-large .pip-adjust-bar {
+  padding: 8px 0;
+}
+
+.pip-custom-form {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  position: relative;
+  z-index: 10;
+  padding: 4px 0;
+}
+
+.pip-custom-form input {
+  flex: 1;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11px;
+}
+
+.custom-submit-btn {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #122013;
+  font-size: 11px;
+  font-weight: 550;
+}
+
+.custom-cancel-btn {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.pip-progress-track {
+  height: 3px;
+  width: 100%;
+  background: var(--track);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+  z-index: 5;
+  margin-top: 4px;
+}
+
+.pip-progress-track > span {
+  display: block;
+  height: 100%;
+  transition: width 0.6s linear;
+}
+
+.pip-task-modal {
+  position: absolute;
+  inset: 6px;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
+  border-radius: 10px;
+  padding: 8px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: var(--shadow);
+}
+
+.pip-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 4px;
+}
+
+.pip-modal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.pip-task-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--text);
+  text-align: left;
+  width: 100%;
+}
+
+.pip-task-row:hover,
+.pip-task-row.active {
+  background: var(--raised);
+}
+
+.pip-task-row .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pip-task-row .name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 550;
+}
+
+.pip-task-row .time {
+  font-size: 9px;
+  color: var(--muted);
+}
+
+/* Safe Reset Confirmation Modal for PiP */
+.pip-confirm-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.68);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+  padding: 12px;
+  border-radius: inherit;
+}
+
+.pip-confirm-box {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  width: 100%;
+  max-width: 260px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.pip-confirm-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.pip-confirm-desc {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0 0 12px 0;
+  line-height: 1.4;
+}
+
+.pip-confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.pip-confirm-btn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.pip-confirm-btn.cancel {
+  background: var(--raised);
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+
+.pip-confirm-btn.cancel:hover {
+  color: var(--text);
+}
+
+.pip-confirm-btn.confirm {
+  background: rgba(220, 38, 38, 0.9);
+  color: #fff;
+  border: 1px solid rgba(220, 38, 38, 1);
+}
+
+.pip-confirm-btn.confirm:hover {
+  background: rgb(220, 38, 38);
+}
+
+.pip-confirm-btn.sm {
+  padding: 3px 8px;
+  font-size: 10px;
+  border-radius: 5px;
+}
+
+
