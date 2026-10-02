@@ -1042,7 +1042,9 @@ export default function FlowTimer() {
               <span className="brand-subtitle">không gian tập trung</span>
             </div>
             <div className="title-actions no-drag">
-              <span className="local-indicator"><i />Lưu trên máy</span>
+              <span className="local-indicator cloud" title="Đã kết nối MongoDB Atlas (dongho)">
+                <i />Đồng bộ Cloud
+              </span>
               <IconButton
                 title={state.theme === 'dark' ? 'Giao diện sáng' : 'Giao diện tối'}
                 onClick={() => flow.updateSettings({ theme: state.theme === 'dark' ? 'light' : 'dark' })}

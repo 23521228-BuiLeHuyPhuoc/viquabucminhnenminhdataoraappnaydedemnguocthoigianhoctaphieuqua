@@ -157,9 +157,47 @@ handle('window:snap-corner', corner => {
   return { success: true };
 });
 
-handle('storage:load', () => {
+let MongoClient;
+try {
+  MongoClient = require('mongodb').MongoClient;
+} catch (e) {
+  MongoClient = null;
+}
+
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://admin:123@ac-r3mct8m-shard-00-00.o3r6tac.mongodb.net:27017,ac-r3mct8m-shard-00-01.o3r6tac.mongodb.net:27017,ac-r3mct8m-shard-00-02.o3r6tac.mongodb.net:27017/dongho?ssl=true&replicaSet=atlas-7hog99-shard-0&authSource=admin&retryWrites=true&w=majority';
+let mongoClient = null;
+
+async function getMongoCollection() {
+  if (!MongoClient || !MONGODB_URI) return null;
   try {
-    return { success: true, data: readJSON('flow_timer_data.json') };
+    if (!mongoClient) {
+      mongoClient = new MongoClient(MONGODB_URI, {
+        connectTimeoutMS: 5000,
+        serverSelectionTimeoutMS: 5000,
+      });
+      await mongoClient.connect();
+    }
+    return mongoClient.db('dongho').collection('flow_state');
+  } catch (err) {
+    mongoClient = null;
+    return null;
+  }
+}
+
+handle('storage:load', async () => {
+  try {
+    const local = readJSON('flow_timer_data.json');
+    try {
+      const col = await getMongoCollection();
+      if (col) {
+        const doc = await col.findOne({ _id: 'user_flow_data' });
+        if (doc?.data && Array.isArray(doc.data.tasks) && doc.data.tasks.length > 0) {
+          atomicWrite('flow_timer_data.json', doc.data);
+          return { success: true, data: doc.data };
+        }
+      }
+    } catch (e) {}
+    return { success: true, data: local };
   } catch (error) {
     return { success: false, error: `Không đọc được dữ liệu đã lưu: ${error.message}` };
   }
@@ -171,6 +209,17 @@ handle('storage:save', data => {
     const serialized = JSON.stringify(data);
     if (Buffer.byteLength(serialized) > 5 * 1024 * 1024) throw new Error('Dữ liệu quá lớn.');
     atomicWrite('flow_timer_data.json', data);
+
+    getMongoCollection().then(col => {
+      if (col) {
+        col.updateOne(
+          { _id: 'user_flow_data' },
+          { $set: { data, updatedAt: new Date() } },
+          { upsert: true }
+        ).catch(() => {});
+      }
+    }).catch(() => {});
+
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };

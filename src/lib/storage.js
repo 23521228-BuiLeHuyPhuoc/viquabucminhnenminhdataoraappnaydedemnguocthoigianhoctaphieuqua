@@ -32,22 +32,78 @@ export function sanitizeLoadedState(raw) {
     visualMode: raw.visualMode === 'hourglass' ? 'hourglass' : 'ring',
     handledSessionIds: Array.isArray(raw.handledSessionIds) ? raw.handledSessionIds.filter(x => typeof x === 'string').slice(-500) : [] };
 }
+let syncTimer = null;
+let lastSyncedString = null;
+
+async function syncToMongoDB(data) {
+  if (typeof window === 'undefined' || typeof fetch === 'undefined') return;
+  try {
+    const serialized = JSON.stringify(data);
+    if (serialized === lastSyncedString) return;
+    const res = await fetch('/api/timer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data }),
+    });
+    if (res.ok) {
+      lastSyncedString = serialized;
+    }
+  } catch (err) {
+    // Hoạt động offline bình thường nếu mất mạng
+  }
+}
+
 export async function loadPersistedState() {
   if (typeof window === 'undefined') return sanitizeLoadedState(null);
+
+  let localData = null;
   if (window.electronAPI) {
     const result = await window.electronAPI.loadData();
     if (result?.success === false) throw new Error(result.error || 'Không thể đọc dữ liệu.');
-    return sanitizeLoadedState(result?.success === true ? result.data : result);
+    localData = sanitizeLoadedState(result?.success === true ? result.data : result);
+  } else {
+    const value = window.localStorage.getItem(STORAGE_KEY);
+    localData = sanitizeLoadedState(value ? JSON.parse(value) : null);
   }
-  const value = window.localStorage.getItem(STORAGE_KEY);
-  return sanitizeLoadedState(value ? JSON.parse(value) : null);
+
+  // Nếu trên trình duyệt, thử kiểm tra bản lưu mới nhất từ MongoDB Atlas
+  if (typeof window !== 'undefined' && !window.electronAPI && typeof fetch !== 'undefined') {
+    try {
+      const res = await fetch('/api/timer');
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.success && json?.data && Array.isArray(json.data.tasks) && json.data.tasks.length > 0) {
+          const remoteData = sanitizeLoadedState(json.data);
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(remoteData));
+          return remoteData;
+        }
+      }
+    } catch (e) {
+      // Sử dụng localData nếu chưa kết nối được
+    }
+  }
+
+  return localData;
 }
-// Each mutation is persisted immediately. No trailing debounce that can lose the last action.
+
+// Lưu dữ liệu tức thì vào máy cục bộ (0ms), đồng thời đồng bộ ngầm lên MongoDB Atlas
 export async function savePersistedState(state) {
   if (typeof window === 'undefined') return;
   const data = sanitizeLoadedState(state);
+
+  // 1. Lưu tức thì trên máy (localStorage hoặc Electron)
   if (window.electronAPI) {
     const result = await window.electronAPI.saveData(data);
     if (!result?.success) throw new Error(result?.error || 'Không thể lưu dữ liệu.');
-  } else window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } else {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }
+
+  // 2. Đồng bộ ngầm lên MongoDB Atlas (debounce 1 giây để tránh spam network)
+  if (typeof window !== 'undefined' && !window.electronAPI) {
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => {
+      syncToMongoDB(data);
+    }, 1000);
+  }
 }
