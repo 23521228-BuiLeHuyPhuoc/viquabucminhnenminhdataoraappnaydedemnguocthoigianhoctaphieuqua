@@ -1,7 +1,10 @@
+const isVercel = !!process.env.VERCEL;
+
 module.exports = {
-  output: process.env.NODE_ENV === 'production' ? 'export' : undefined,
-  assetPrefix: process.env.NODE_ENV === 'production' ? './' : undefined,
+  output: isVercel ? undefined : (process.env.NODE_ENV === 'production' ? 'export' : undefined),
+  assetPrefix: isVercel ? undefined : (process.env.NODE_ENV === 'production' ? './' : undefined),
   images: { unoptimized: true },
   trailingSlash: true,
   reactStrictMode: true,
 };
+

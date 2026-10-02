@@ -2592,6 +2592,153 @@ kbd {
   color: var(--muted);
 }
 
+/* Sound Selector Modal in PiP */
+.pip-sound-modal {
+  max-height: calc(100% - 12px);
+  background: color-mix(in srgb, var(--surface) 96%, black);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+
+.modal-title-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.accent-icon {
+  color: var(--accent);
+}
+
+.pip-sound-volume-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: var(--raised);
+  border-radius: 7px;
+  border: 1px solid var(--line);
+}
+
+.pip-sound-volume-bar .volume-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.pip-sound-volume-bar .volume-info strong {
+  color: var(--accent);
+  min-width: 24px;
+}
+
+.pip-volume-slider {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  background: var(--track);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.pip-volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  box-shadow: 0 0 6px var(--accent);
+}
+
+.sound-list-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow-y: auto;
+  max-height: 160px;
+  padding-right: 2px;
+}
+
+.pip-sound-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: var(--raised);
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.18s;
+  width: 100%;
+}
+
+.pip-sound-row:hover {
+  background: color-mix(in srgb, var(--accent) 15%, var(--raised));
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.pip-sound-row.active {
+  background: color-mix(in srgb, var(--accent) 22%, var(--raised));
+  border-color: var(--accent);
+}
+
+.sound-icon-box {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.sound-icon-box.active {
+  background: var(--accent);
+  color: #111512;
+}
+
+.sound-text-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.sound-title {
+  font-size: 11px;
+  font-weight: 550;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sound-subtitle {
+  font-size: 9px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sound-active-check {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
 /* Safe Reset Confirmation Modal for PiP */
 .pip-confirm-overlay {
   position: absolute;
@@ -3106,6 +3253,194 @@ kbd {
 @keyframes quote-progress-fill-anim {
   0% { width: 0%; }
   100% { width: 100%; }
+}
+
+/* ==========================================================================
+   AMBIENT FOCUS SOUNDS MODAL & FOOTER CONTROLS
+   ========================================================================== */
+
+.footer-sound-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.footer-ambient-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.footer-ambient-btn:hover {
+  background: var(--raised);
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.footer-ambient-btn.active {
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.footer-sound-toggle {
+  font-size: 11px;
+  color: var(--subtle);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  transition: color 0.2s;
+}
+
+.footer-sound-toggle:hover {
+  color: var(--text);
+}
+
+.ambient-modal-intro p {
+  margin: 0 0 14px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.ambient-volume-slider-box {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+
+.ambient-volume-slider-box .volume-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.ambient-volume-slider-box .volume-header strong {
+  color: var(--accent);
+}
+
+.ambient-slider {
+  width: 100%;
+  height: 6px;
+  -webkit-appearance: none;
+  background: var(--track);
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+
+.ambient-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  box-shadow: 0 0 8px var(--accent);
+}
+
+.ambient-presets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 8px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.ambient-preset-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ambient-preset-card:hover {
+  background: var(--raised);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  transform: translateY(-1px);
+}
+
+.ambient-preset-card.active {
+  background: color-mix(in srgb, var(--accent) 15%, var(--surface));
+  border-color: var(--accent);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.ambient-preset-card .card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 2px;
+}
+
+.preset-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1.5px 6px;
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--muted);
+}
+
+.preset-badge.active {
+  background: var(--accent);
+  color: #111512;
+}
+
+.playing-pulse {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+  animation: pulse-ring 2s infinite ease-in-out;
+}
+
+.preset-card-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.preset-card-desc {
+  margin: 0;
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.sound-select {
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--text);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  cursor: pointer;
+  max-width: 200px;
 }
 
 

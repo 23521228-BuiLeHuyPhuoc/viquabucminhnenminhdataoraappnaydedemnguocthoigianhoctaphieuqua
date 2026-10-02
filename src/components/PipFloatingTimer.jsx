@@ -421,6 +421,16 @@ export default function PipFloatingTimer({
               <div className="pip-bar-actions">
                 <button
                   type="button"
+                  className={`adjust-pill ${soundMode !== 'off' ? 'active' : ''}`}
+                  onClick={handleSoundCycle}
+                  title={`Âm thanh: ${currentPreset?.name} (Bấm để đổi âm tiếp theo)`}
+                >
+                  {getSoundIcon(soundMode, 11)}
+                  <span>{currentPreset?.label || 'Âm'}</span>
+                </button>
+
+                <button
+                  type="button"
                   className="adjust-pill"
                   disabled={!task}
                   onClick={() => task && onAdjustTime(task.id, 300)}

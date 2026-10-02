@@ -34,6 +34,7 @@ import { getRemainingSeconds, getTaskStatus, isTaskRunning, TIMER_STATUS, PALETT
 import { formatRemaining, formatDurationShort, parseDuration } from '../lib/time-parser.js';
 import { desktopBridge } from '../lib/desktop-bridge.js';
 import { playCompletionSound } from '../lib/sound.js';
+import { ambientSound, SOUND_PRESETS } from '../lib/ambient-sound.js';
 import AmbientBackground from './AmbientBackground';
 import PipFloatingTimer, { FAMOUS_QUOTES } from './PipFloatingTimer';
 
@@ -279,6 +280,26 @@ function Settings({ state, update, close }) {
       <button className="text-button" onClick={playCompletionSound}>
         <Volume2 size={15} />Nghe thử âm báo
       </button>
+      <div className="setting-row">
+        <div>
+          <strong>Âm thanh nền tập trung</strong>
+          <p>10 loại âm thanh thiên nhiên & tần số não Alpha.</p>
+        </div>
+        <select
+          value={ambientSound.getSound()}
+          onChange={e => {
+            ambientSound.play(e.target.value);
+            setMessage(e.target.value === 'off' ? 'Đã tắt âm thanh nền.' : `Đang phát: ${e.target.selectedOptions[0]?.text}`);
+          }}
+          className="sound-select"
+        >
+          {SOUND_PRESETS.map(p => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      </div>
       <Toggle
         title="Thông báo"
         detail="Nhắc khi phiên tập trung kết thúc."
@@ -302,6 +323,71 @@ function Settings({ state, update, close }) {
       {message && <p className="field-help" role="status">{message}</p>}
       <div className="dialog-actions">
         <button className="primary-button" onClick={close}>Xong<Check size={17} /></button>
+      </div>
+    </Dialog>
+  );
+}
+
+function AmbientSoundModal({ onClose }) {
+  const [current, setCurrent] = useState(ambientSound.getSound());
+  const [vol, setVol] = useState(ambientSound.getVolume());
+
+  return (
+    <Dialog title="Âm thanh tập trung (10 loại soundscapes)" onClose={onClose}>
+      <div className="ambient-modal-intro">
+        <p>Tuyển tập 10 loại âm thanh chuẩn khoa học (Brain.fm, Noisli, Endel, Tide) giúp kích hoạt dòng chảy (Flow State) và ngăn chặn phân tâm.</p>
+      </div>
+
+      <div className="ambient-volume-slider-box">
+        <div className="volume-header">
+          <span>Âm lượng âm thanh nền</span>
+          <strong>{Math.round(vol * 100)}%</strong>
+        </div>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.05"
+          value={vol}
+          onChange={e => {
+            const val = parseFloat(e.target.value);
+            setVol(val);
+            ambientSound.setVolume(val);
+          }}
+          className="ambient-slider"
+        />
+      </div>
+
+      <div className="ambient-presets-grid">
+        {SOUND_PRESETS.map(preset => {
+          const isActive = current === preset.id;
+          return (
+            <button
+              key={preset.id}
+              type="button"
+              className={`ambient-preset-card ${isActive ? 'active' : ''}`}
+              onClick={() => {
+                ambientSound.play(preset.id);
+                setCurrent(preset.id);
+              }}
+            >
+              <div className="card-top">
+                <span className={`preset-badge ${isActive ? 'active' : ''}`}>
+                  {preset.label}
+                </span>
+                {isActive && <span className="playing-pulse">● Đang phát</span>}
+              </div>
+              <strong className="preset-card-name">{preset.name}</strong>
+              <p className="preset-card-desc">{preset.desc}</p>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="dialog-actions">
+        <button className="primary-button" onClick={onClose}>
+          Xong <Check size={16} />
+        </button>
       </div>
     </Dialog>
   );
@@ -733,6 +819,8 @@ export default function FlowTimer() {
   const [confirm, setConfirm] = useState(null);
   const [visualState, setVisualState] = useState('idle');
   const [pipWindow, setPipWindow] = useState(null);
+  const [ambientModal, setAmbientModal] = useState(false);
+  const [ambientSoundType, setAmbientSoundType] = useState(ambientSound.getSound());
   const resetTimerRef = useRef(null);
   const [mainQuoteIdx, setMainQuoteIdx] = useState(0);
   const [mainQuoteFading, setMainQuoteFading] = useState(false);
@@ -1450,13 +1538,30 @@ export default function FlowTimer() {
             <span>
               <span className="footer-spark">✳</span> Ít xao nhãng hơn. Nhiều khoảng tập trung hơn.
             </span>
-            <button
-              className="no-drag"
-              onClick={() => flow.updateSettings({ soundEnabled: !state.soundEnabled })}
-            >
-              {state.soundEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
-              <span>Âm thanh {state.soundEnabled ? 'bật' : 'tắt'}</span>
-            </button>
+            <div className="footer-sound-group no-drag">
+              <button
+                type="button"
+                className={`footer-ambient-btn ${ambientSoundType !== 'off' ? 'active' : ''}`}
+                onClick={() => setAmbientModal(true)}
+                title="Chọn âm thanh tập trung (10 loại soundscapes chuẩn Brain.fm, Noisli, Endel, Tide)"
+              >
+                {ambientSoundType === 'off' ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                <span>
+                  {ambientSoundType === 'off'
+                    ? 'Âm nền: Tắt'
+                    : `Âm nền: ${SOUND_PRESETS.find(p => p.id === ambientSoundType)?.label || 'Bật'}`}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className="footer-sound-toggle"
+                onClick={() => flow.updateSettings({ soundEnabled: !state.soundEnabled })}
+                title="Chuông báo khi hoàn thành phiên"
+              >
+                <span>Chuông {state.soundEnabled ? 'bật' : 'tắt'}</span>
+              </button>
+            </div>
           </footer>
         </div>
       )}
@@ -1493,7 +1598,19 @@ export default function FlowTimer() {
         <Settings
           state={state}
           update={flow.updateSettings}
-          close={() => setSettings(false)}
+          close={() => {
+            setSettings(false);
+            setAmbientSoundType(ambientSound.getSound());
+          }}
+        />
+      )}
+
+      {ambientModal && (
+        <AmbientSoundModal
+          onClose={() => {
+            setAmbientModal(false);
+            setAmbientSoundType(ambientSound.getSound());
+          }}
         />
       )}
 
