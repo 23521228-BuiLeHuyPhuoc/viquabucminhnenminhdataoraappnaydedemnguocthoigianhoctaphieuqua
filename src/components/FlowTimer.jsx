@@ -35,7 +35,7 @@ import { formatRemaining, formatDurationShort, parseDuration } from '../lib/time
 import { desktopBridge } from '../lib/desktop-bridge.js';
 import { playCompletionSound } from '../lib/sound.js';
 import AmbientBackground from './AmbientBackground';
-import PipFloatingTimer from './PipFloatingTimer';
+import PipFloatingTimer, { FAMOUS_QUOTES } from './PipFloatingTimer';
 
 const STATUS = {
   idle: 'Sẵn sàng bắt đầu',
@@ -734,6 +734,24 @@ export default function FlowTimer() {
   const [visualState, setVisualState] = useState('idle');
   const [pipWindow, setPipWindow] = useState(null);
   const resetTimerRef = useRef(null);
+  const [mainQuoteIdx, setMainQuoteIdx] = useState(0);
+  const [mainQuoteFading, setMainQuoteFading] = useState(false);
+
+  const switchMainQuote = nextIndex => {
+    if (mainQuoteFading) return;
+    setMainQuoteFading(true);
+    setTimeout(() => {
+      setMainQuoteIdx(nextIndex);
+      setMainQuoteFading(false);
+    }, 300);
+  };
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      switchMainQuote((mainQuoteIdx + 1) % FAMOUS_QUOTES.length);
+    }, 18000);
+    return () => clearInterval(timer);
+  }, [mainQuoteIdx]);
 
   const desktop = typeof window !== 'undefined' && !!window.electronAPI;
   const selected = state?.tasks.find(t => t.id === state.selectedTaskId) || state?.tasks[0];
@@ -794,6 +812,41 @@ export default function FlowTimer() {
     fontLink.href = 'https://fonts.cdnfonts.com/css/google-sans';
     win.document.head.appendChild(fontLink);
 
+    // Guaranteed Google Sans font rules & root styling
+    const directFont = win.document.createElement('style');
+    directFont.id = 'pip-google-sans-override';
+    directFont.textContent = `
+      @import url('https://fonts.cdnfonts.com/css/google-sans');
+      @font-face {
+        font-family: 'Google Sans';
+        font-style: normal;
+        font-weight: 400;
+        src: local('Google Sans Regular'), local('Google Sans'), local('Product Sans'), url('https://fonts.cdnfonts.com/s/14955/ProductSans-Regular.woff') format('woff');
+      }
+      @font-face {
+        font-family: 'Google Sans';
+        font-style: italic;
+        font-weight: 400;
+        src: local('Google Sans Italic'), local('Product Sans Italic'), url('https://fonts.cdnfonts.com/s/14955/ProductSans-Italic.woff') format('woff');
+      }
+      @font-face {
+        font-family: 'Google Sans';
+        font-style: normal;
+        font-weight: 500;
+        src: local('Google Sans Medium'), local('Product Sans Medium'), url('https://fonts.cdnfonts.com/s/14955/ProductSans-Medium.woff') format('woff');
+      }
+      @font-face {
+        font-family: 'Google Sans';
+        font-style: normal;
+        font-weight: 700;
+        src: local('Google Sans Bold'), local('Product Sans Bold'), url('https://fonts.cdnfonts.com/s/14955/ProductSans-Bold.woff') format('woff');
+      }
+      *, html, body, button, input, select, textarea, .pip-root {
+        font-family: 'Google Sans', 'Product Sans', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+      }
+    `;
+    win.document.head.appendChild(directFont);
+
     // Traverse document.styleSheets
     Array.from(document.styleSheets).forEach(sheet => {
       try {
@@ -827,6 +880,25 @@ export default function FlowTimer() {
         win.document.head.appendChild(newStyle);
       }
     });
+
+    // Sync future style updates (HMR in dev) into PiP
+    try {
+      const observer = new MutationObserver(mutations => {
+        if (win.closed) {
+          observer.disconnect();
+          return;
+        }
+        for (const m of mutations) {
+          m.addedNodes.forEach(node => {
+            if (node.nodeName === 'STYLE' || node.nodeName === 'LINK') {
+              win.document.head.appendChild(node.cloneNode(true));
+            }
+          });
+        }
+      });
+      observer.observe(document.head, { childList: true });
+      win.addEventListener('pagehide', () => observer.disconnect());
+    } catch (e) {}
   }
 
   // Document Picture-in-Picture for browser (always floating on screen when opening new tabs!)
@@ -1183,6 +1255,27 @@ export default function FlowTimer() {
                   </span>
                   <ArrowUpRight size={14} />
                 </button>
+              </div>
+
+              {/* Luminous Frosted Glass Quote Capsule */}
+              <div
+                className={`flow-quote-capsule ${mainQuoteFading ? 'fading' : ''} no-drag`}
+                onClick={() => switchMainQuote((mainQuoteIdx + 1) % FAMOUS_QUOTES.length)}
+                role="button"
+                tabIndex={0}
+                title="Bấm để đổi câu danh ngôn tiếp theo (Click to switch quote)"
+              >
+                <div className="quote-badge-glow">
+                  <span className="quote-sparkle">✦</span>
+                </div>
+                <div className="quote-content">
+                  <span className="quote-text">“{FAMOUS_QUOTES[mainQuoteIdx].text}”</span>
+                  <span className="quote-author">— {FAMOUS_QUOTES[mainQuoteIdx].author}</span>
+                </div>
+                <span className="quote-shimmer-sweep" />
+                <div className="quote-progress-track">
+                  <div className="quote-progress-fill" key={mainQuoteIdx} />
+                </div>
               </div>
 
               {selected ? (
