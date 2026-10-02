@@ -71,10 +71,17 @@ export function parseDuration(raw) {
 
   const totalSeconds = Math.round(totalMinutes * 60);
 
-  if (!Number.isFinite(totalSeconds) || totalSeconds < 1 || totalSeconds > MAX_DURATION_SECONDS) {
+  if (!Number.isFinite(totalSeconds) || totalSeconds < 1) {
     return {
       success: false,
-      error: 'Thời lượng phải từ 1 giây đến 24 giờ.'
+      error: 'Thời lượng phải lớn hơn 0.'
+    };
+  }
+
+  if (totalSeconds > MAX_DURATION_SECONDS) {
+    return {
+      success: false,
+      error: 'Thời lượng không được vượt quá 24 giờ.'
     };
   }
 
