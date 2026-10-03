@@ -157,6 +157,25 @@ handle('window:snap-corner', corner => {
   return { success: true };
 });
 
+handle('window:set-height', targetHeight => {
+  if (!win || win.isDestroyed()) return { success: false };
+  if (typeof targetHeight !== 'number' || targetHeight < 50) return { success: false };
+  const current = win.getBounds();
+  const area = screen.getDisplayMatching(current).workArea;
+  const newHeight = Math.max(60, Math.min(area.height, Math.round(targetHeight)));
+  let newY = current.y;
+  if (newY + newHeight > area.y + area.height) {
+    newY = Math.max(area.y, area.y + area.height - newHeight);
+  }
+  win.setBounds({
+    x: current.x,
+    y: newY,
+    width: current.width,
+    height: newHeight,
+  });
+  return { success: true, height: newHeight };
+});
+
 let MongoClient;
 try {
   MongoClient = require('mongodb').MongoClient;

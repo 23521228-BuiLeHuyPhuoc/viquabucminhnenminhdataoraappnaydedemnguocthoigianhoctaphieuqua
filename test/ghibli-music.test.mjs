@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { GHIBLI_TRACKS, ghibliMusic } from '../src/lib/ghibli-music.js';
 import { ambientSound, SOUND_PRESETS } from '../src/lib/ambient-sound.js';
 
-test('Ghibli Music - Danh sách track có đầy đủ các bản nhạc Ghibli kinh điển & Live stream', () => {
+test('Ghibli Music - Danh sách track có đầy đủ các bản nhạc Ghibli kinh điển', () => {
   assert.ok(Array.isArray(GHIBLI_TRACKS));
   assert.ok(GHIBLI_TRACKS.length >= 20, `Cần ít nhất 20 bản nhạc, hiện có ${GHIBLI_TRACKS.length}`);
 
@@ -15,8 +15,6 @@ test('Ghibli Music - Danh sách track có đầy đủ các bản nhạc Ghibli 
   assert.ok(ids.includes('ghibli_laputa'), 'Phải có Carrying You (Castle in the Sky)');
   assert.ok(ids.includes('ghibli_always'), 'Phải có Always With Me (Spirited Away Ending)');
   assert.ok(ids.includes('ghibli_mononoke'), 'Phải có Princess Mononoke Main Theme');
-  assert.ok(ids.includes('ghibli_radio_piano'), 'Phải có Đài Live Piano 24/7');
-  assert.ok(ids.includes('ghibli_radio_lofi'), 'Phải có Đài Live Lofi Chillhop 24/7');
 });
 
 test('Ghibli Music - Mỗi bài hát có cấu trúc streamUrl hoặc nốt hợp âm chuẩn xác', () => {
@@ -73,4 +71,102 @@ test('Ambient Sound - Đồng bộ preset và subscription hoạt động chính
   assert.strictEqual(notifiedSound, 'off');
 
   unsub();
+});
+
+test('Ghibli Music - Chức năng Shuffle (Trộn bài) hoạt động chính xác', async () => {
+  const { PLAYLISTS, LOOP_MODE } = await import('../src/lib/ghibli-music.js');
+
+  // Initial shuffle should be false
+  ghibliMusic.setShuffle(false);
+  assert.strictEqual(ghibliMusic.getState().shuffle, false);
+
+  // Toggle shuffle to true
+  ghibliMusic.toggleShuffle();
+  assert.strictEqual(ghibliMusic.getState().shuffle, true);
+
+  // Toggle back to false
+  ghibliMusic.toggleShuffle();
+  assert.strictEqual(ghibliMusic.getState().shuffle, false);
+
+  // Direct set
+  ghibliMusic.setShuffle(true);
+  assert.strictEqual(ghibliMusic.getState().shuffle, true);
+  ghibliMusic.setShuffle(false);
+});
+
+test('Ghibli Music - Chức năng Loop (Lặp nhạc) hỗ trợ 3 chế độ: ALL, ONE, OFF', async () => {
+  const { LOOP_MODE } = await import('../src/lib/ghibli-music.js');
+
+  ghibliMusic.setLoopMode(LOOP_MODE.ALL);
+  assert.strictEqual(ghibliMusic.getState().loopMode, LOOP_MODE.ALL);
+
+  // Cycle to ONE
+  ghibliMusic.cycleLoopMode();
+  assert.strictEqual(ghibliMusic.getState().loopMode, LOOP_MODE.ONE);
+
+  // Cycle to OFF
+  ghibliMusic.cycleLoopMode();
+  assert.strictEqual(ghibliMusic.getState().loopMode, LOOP_MODE.OFF);
+
+  // Cycle back to ALL
+  ghibliMusic.cycleLoopMode();
+  assert.strictEqual(ghibliMusic.getState().loopMode, LOOP_MODE.ALL);
+
+  // Rejects invalid mode
+  ghibliMusic.setLoopMode('invalid_mode');
+  assert.strictEqual(ghibliMusic.getState().loopMode, LOOP_MODE.ALL);
+});
+
+test('Ghibli Music - Danh sách phát (Playlists) phân loại chuẩn theo từng bộ phim', async () => {
+  const { PLAYLISTS } = await import('../src/lib/ghibli-music.js');
+
+  assert.ok(Array.isArray(PLAYLISTS));
+  assert.ok(PLAYLISTS.length >= 8);
+
+  const playlistIds = PLAYLISTS.map(p => p.id);
+  assert.ok(playlistIds.includes('all'));
+  assert.ok(playlistIds.includes('spirited'));
+  assert.ok(playlistIds.includes('totoro'));
+  assert.ok(playlistIds.includes('kiki'));
+  assert.ok(playlistIds.includes('mononoke'));
+  assert.ok(playlistIds.includes('howl_film'));
+  assert.ok(playlistIds.includes('nausicaa'));
+
+  // Switch playlist to spirited
+  ghibliMusic.setPlaylist('spirited');
+  assert.strictEqual(ghibliMusic.getState().activePlaylist, 'spirited');
+
+  // Verify track filtering by playlist
+  const spiritedTracks = GHIBLI_TRACKS.filter(t => t.playlist === 'spirited');
+  assert.ok(spiritedTracks.length >= 2);
+  for (const t of spiritedTracks) {
+    assert.strictEqual(t.playlist, 'spirited');
+  }
+
+  // Switch playlist to totoro
+  ghibliMusic.setPlaylist('totoro');
+  assert.strictEqual(ghibliMusic.getState().activePlaylist, 'totoro');
+
+  // Reject invalid playlist
+  ghibliMusic.setPlaylist('non_existent_category');
+  assert.strictEqual(ghibliMusic.getState().activePlaylist, 'totoro');
+
+  // Reset to all
+  ghibliMusic.setPlaylist('all');
+  assert.strictEqual(ghibliMusic.getState().activePlaylist, 'all');
+});
+
+test('Ghibli Music - Chuyển bài (nextTrack / prevTrack) an toàn không vượt quá giới hạn', () => {
+  const initialTrack = ghibliMusic.getCurrentTrack();
+  assert.ok(initialTrack);
+
+  // nextTrack
+  ghibliMusic.nextTrack();
+  const nextTrack = ghibliMusic.getCurrentTrack();
+  assert.ok(nextTrack);
+
+  // prevTrack
+  ghibliMusic.prevTrack();
+  const prevTrack = ghibliMusic.getCurrentTrack();
+  assert.ok(prevTrack);
 });

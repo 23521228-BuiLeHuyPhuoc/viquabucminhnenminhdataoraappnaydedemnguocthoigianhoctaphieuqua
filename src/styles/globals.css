@@ -874,13 +874,15 @@ dialog {
 /* ======================================================== */
 .mini-ghibli-popover {
   position: absolute;
-  bottom: calc(100% + 10px);
+  top: 76px;
+  left: 10px;
   right: 10px;
-  width: 320px;
-  background: color-mix(in srgb, var(--surface) 95%, transparent);
+  max-width: 420px;
+  margin: 0 auto;
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
   backdrop-filter: blur(28px) saturate(200%);
   -webkit-backdrop-filter: blur(28px) saturate(200%);
-  border: 1px solid color-mix(in srgb, #f59e0b 35%, var(--line));
+  border: 1px solid color-mix(in srgb, #f59e0b 40%, var(--line));
   border-radius: 18px;
   padding: 12px;
   z-index: 100;
@@ -889,12 +891,14 @@ dialog {
   gap: 10px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 25px rgba(245, 158, 11, 0.15);
   animation: popover-slide-up 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  max-height: 330px;
+  overflow: hidden;
 }
 
 @keyframes popover-slide-up {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.96);
+    transform: translateY(-8px) scale(0.96);
   }
   to {
     opacity: 1;
@@ -964,8 +968,8 @@ dialog {
 }
 
 .ghibli-step-btn {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border-radius: 6px;
   display: grid;
   place-items: center;
@@ -978,6 +982,47 @@ dialog {
 .ghibli-step-btn:hover {
   color: var(--text);
   background: var(--surface);
+}
+
+.ghibli-ctrl-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted);
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s ease;
+}
+
+.ghibli-ctrl-btn:hover {
+  color: var(--text);
+  background: var(--surface);
+  border-color: rgba(251, 191, 36, 0.4);
+}
+
+.ghibli-ctrl-btn.active {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.45);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.25);
+}
+
+.ghibli-ctrl-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  font-size: 7.5px;
+  line-height: 1;
+  font-weight: 700;
+  padding: 1px 3px;
+  border-radius: 4px;
+  background: #fbbf24;
+  color: #1a1608;
 }
 
 .ghibli-toggle-btn {
@@ -994,6 +1039,354 @@ dialog {
 
 .ghibli-toggle-btn:hover {
   transform: scale(1.08);
+}
+
+/* Playlist horizontal category scroller */
+.ghibli-playlist-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow-x: auto;
+  padding: 2px 0 4px 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.ghibli-playlist-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.ghibli-playlist-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 550;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.ghibli-playlist-pill:hover {
+  color: var(--text);
+  border-color: rgba(251, 191, 36, 0.4);
+  background: var(--raised);
+}
+
+.ghibli-playlist-pill.active {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.6);
+  font-weight: 600;
+}
+
+/* Sound Tabs in Popover: Ghibli vs Nature */
+.mini-sound-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 2px;
+}
+
+.mini-sound-tab-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 550;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.mini-sound-tab-btn:hover {
+  color: var(--text);
+}
+
+.mini-sound-tab-btn.active {
+  background: var(--raised);
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Visual Mini-Orb in Bar */
+.mini-visual-orb {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  border: 1px solid var(--line);
+  color: var(--text);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s;
+  padding: 2px;
+}
+
+.mini-visual-orb:hover {
+  background: var(--raised);
+  border-color: var(--accent);
+  transform: scale(1.06);
+}
+
+.mini-visual-orb.running {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.mini-hourglass-svg-sm {
+  width: 15px;
+  height: 17px;
+}
+
+.mini-ring-svg-sm {
+  width: 18px;
+  height: 18px;
+}
+
+/* Percentage Badge */
+.mini-percent-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1.5px 5px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+
+.mini-percent-badge.running {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* Bar Quote Button & Popover */
+.mini-quote-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.mini-quote-btn:hover,
+.mini-quote-btn.active {
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.15);
+}
+
+.mini-quote-popover {
+  position: absolute;
+  top: 76px;
+  left: 10px;
+  right: 10px;
+  max-width: 420px;
+  margin: 0 auto;
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid color-mix(in srgb, #38bdf8 40%, var(--line));
+  border-radius: 14px;
+  padding: 12px 14px;
+  z-index: 90;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: popover-slide-up 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mini-quote-popover .quote-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mini-quote-popover .quote-text {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.mini-quote-popover .quote-author {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #38bdf8;
+  align-self: flex-end;
+}
+
+.mini-quote-popover .quote-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--line);
+  padding-top: 6px;
+  margin-top: 2px;
+}
+
+.mini-quote-cycle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  transition: color 0.15s;
+}
+
+.mini-quote-cycle-btn:hover {
+  color: var(--text);
+}
+
+/* Time Adjust Popover in Bar */
+.mini-adjust-popover {
+  position: absolute;
+  top: 76px;
+  right: 10px;
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  z-index: 90;
+  box-shadow: 0 14px 35px rgba(0, 0, 0, 0.65);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: popover-slide-up 0.18s ease-out;
+}
+
+.mini-adjust-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.mini-adjust-btn {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.mini-adjust-btn:hover {
+  background: var(--raised);
+  border-color: var(--accent);
+}
+
+.mini-adjust-custom-form {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mini-adjust-custom-form input {
+  width: 70px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 11px;
+}
+
+.mini-adjust-custom-form button {
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #1a1a1a;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Safe Reset Overlay in Bar */
+.mini-bar-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+  padding: 0 6px;
+}
+
+.mini-bar-confirm .confirm-text {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-bar-confirm .confirm-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.confirm-btn-pill {
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.confirm-btn-pill.cancel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.confirm-btn-pill.cancel:hover {
+  color: var(--text);
+  background: var(--raised);
+}
+
+.confirm-btn-pill.danger {
+  background: #ef4444;
+  color: white;
+  border: 1px solid #dc2626;
+}
+
+.confirm-btn-pill.danger:hover {
+  background: #dc2626;
 }
 
 .ghibli-volume-row {

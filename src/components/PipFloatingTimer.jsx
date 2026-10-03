@@ -10,6 +10,7 @@ import {
   Sparkles,
   Volume2,
   VolumeX,
+  Volume1,
   Hourglass,
   Focus,
   Quote,
@@ -24,13 +25,17 @@ import {
   Music,
   SkipForward,
   SkipBack,
+  Shuffle,
+  Repeat,
+  Repeat1,
+  ListMusic,
   Wind,
 } from 'lucide-react';
 import { getRemainingSeconds, getTaskStatus } from '../lib/timer-engine.js';
 import { formatRemaining, formatDurationShort } from '../lib/time-parser.js';
 import AmbientBackground from './AmbientBackground';
 import { ambientSound, SOUND_PRESETS } from '../lib/ambient-sound.js';
-import { ghibliMusic, GHIBLI_TRACKS } from '../lib/ghibli-music.js';
+import { ghibliMusic, GHIBLI_TRACKS, PLAYLISTS, LOOP_MODE } from '../lib/ghibli-music.js';
 
 function getSoundIcon(id, size = 13) {
   if (id && id.startsWith('ghibli_')) return <Music size={size} />;
@@ -86,10 +91,13 @@ export default function PipFloatingTimer({
 
   const [taskPicker, setTaskPicker] = useState(false);
   const [soundPicker, setSoundPicker] = useState(false);
+  const [adjustMenu, setAdjustMenu] = useState(false);
+  const [quoteMenu, setQuoteMenu] = useState(false);
   const [customInput, setCustomInput] = useState(false);
   const [inputVal, setInputVal] = useState('');
   const [confirmReset, setConfirmReset] = useState(false);
   const [windowSize, setWindowSize] = useState({ width: 360, height: 260 });
+  const [soundTab, setSoundTab] = useState('ghibli'); // 'ghibli' | 'nature'
 
   // Visual, Sound & Quote states
   const [visualMode, setVisualMode] = useState('hourglass'); // 'hourglass' | 'ring' | 'digits'
@@ -99,11 +107,20 @@ export default function PipFloatingTimer({
   const [quoteIdx, setQuoteIdx] = useState(0);
   const [isFading, setIsFading] = useState(false);
 
+  const [ghibliState, setGhibliState] = useState(ghibliMusic.getState());
+
   useEffect(() => {
-    return ambientSound.subscribe(type => {
+    const unsubAmbient = ambientSound.subscribe(type => {
       setSoundMode(type);
       setSoundVolume(ambientSound.getVolume());
     });
+    const unsubGhibli = ghibliMusic.subscribe(info => {
+      setGhibliState(info);
+    });
+    return () => {
+      unsubAmbient();
+      unsubGhibli();
+    };
   }, []);
 
   const currentPreset = SOUND_PRESETS.find(p => p.id === soundMode) || SOUND_PRESETS[0];
@@ -145,15 +162,19 @@ export default function PipFloatingTimer({
   const isLarge = windowSize.height > 290 && windowSize.width > 400;
   const layout = isBar ? 'bar' : isLarge ? 'large' : 'card';
 
-  // Automatically close sub-UIs when window is resized to bar mode
+  // Any modal / drawer open
+  const anyModal = taskPicker || soundPicker || adjustMenu || quoteMenu || confirmReset;
+
+  // Auto-resize PiP window when sub-UI opens/closes in bar mode
   useEffect(() => {
-    if (isBar) {
-      setCustomInput(false);
-      setTaskPicker(false);
-      setSoundPicker(false);
-      setConfirmReset(false);
+    if (isBar && onResize) {
+      if (anyModal) {
+        onResize(440, 390);
+      } else {
+        onResize(440, 95);
+      }
     }
-  }, [isBar]);
+  }, [anyModal, isBar, onResize]);
 
   // Clean up sound on unmount
   useEffect(() => {
@@ -189,22 +210,24 @@ export default function PipFloatingTimer({
   const percent = task && task.goal > 0 ? Math.min(100, Math.max(0, (1 - left / task.goal) * 100)) : 0;
   const fraction = task && task.goal > 0 ? Math.max(0, Math.min(1, left / task.goal)) : 1;
 
+  const cycleVisualMode = () => {
+    setVisualMode(v => (v === 'hourglass' ? 'ring' : v === 'ring' ? 'digits' : 'hourglass'));
+  };
+
   const handleSizeSelect = mode => {
     if (mode === 'bar') {
       setCustomInput(false);
       setTaskPicker(false);
+      setSoundPicker(false);
       setConfirmReset(false);
+      setAdjustMenu(false);
+      setQuoteMenu(false);
     }
     if (onResize) {
-      if (mode === 'bar') onResize(380, 110);
-      else if (mode === 'large') onResize(460, 330);
-      else onResize(360, 260);
+      if (mode === 'bar') onResize(440, 95);
+      else if (mode === 'large') onResize(480, 360);
+      else onResize(380, 270);
     }
-  };
-
-  const handleSoundCycle = () => {
-    const next = ambientSound.toggleNext();
-    setSoundMode(next);
   };
 
   const handleParticleCycle = () => {
@@ -222,6 +245,7 @@ export default function PipFloatingTimer({
       onAdjustTime(task.id, delta);
       setCustomInput(false);
       setInputVal('');
+      setAdjustMenu(false);
     }
   };
 
@@ -234,6 +258,13 @@ export default function PipFloatingTimer({
       onReset(task.id);
     }
   };
+
+  // Filtered Ghibli tracks based on active playlist
+  const filteredGhibliTracks = ghibliState.activePlaylist === 'all'
+    ? GHIBLI_TRACKS
+    : GHIBLI_TRACKS.filter(t => t.playlist === ghibliState.activePlaylist);
+
+  const naturePresets = SOUND_PRESETS.filter(p => p.category === 'nature');
 
   return (
     <div
@@ -250,10 +281,10 @@ export default function PipFloatingTimer({
       />
 
       {/* Task Picker Modal inside PiP */}
-      {taskPicker && !isBar && (
+      {taskPicker && (
         <div className="pip-task-modal">
           <div className="pip-modal-header">
-            <span>Đổi công việc</span>
+            <span>Đổi công việc học tập ({state.tasks.length})</span>
             <button
               type="button"
               className="pip-icon-btn"
@@ -288,13 +319,13 @@ export default function PipFloatingTimer({
         </div>
       )}
 
-      {/* Sound Selector Popover inside PiP */}
-      {soundPicker && !isBar && (
+      {/* Music & Ambient Sound Hub inside PiP (Shuffle, Loop, Playlists, Nature) */}
+      {soundPicker && (
         <div className="pip-task-modal pip-sound-modal">
           <div className="pip-modal-header">
             <div className="modal-title-with-icon">
-              <Headphones size={13} className="accent-icon" />
-              <span>Âm thanh tập trung ({SOUND_PRESETS.length - 1} loại)</span>
+              <Music size={13} className="text-amber-400" />
+              <span>Âm nhạc & Tiếng ồn tập trung</span>
             </div>
             <button
               type="button"
@@ -306,55 +337,320 @@ export default function PipFloatingTimer({
             </button>
           </div>
 
-          <div className="pip-sound-volume-bar">
-            <div className="volume-info">
-              <span>Âm lượng nền</span>
-              <strong>{Math.round(soundVolume * 100)}%</strong>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={soundVolume}
-              onChange={e => {
-                const val = parseFloat(e.target.value);
-                setSoundVolume(val);
-                ambientSound.setVolume(val);
-              }}
-              className="pip-volume-slider"
-            />
+          {/* Sound Tabs: Ghibli vs Nature */}
+          <div className="mini-sound-tabs">
+            <button
+              type="button"
+              className={`mini-sound-tab-btn ${soundTab === 'ghibli' ? 'active' : ''}`}
+              onClick={() => setSoundTab('ghibli')}
+            >
+              <Music size={12} className="text-amber-400" />
+              <span>Nhạc Ghibli ({GHIBLI_TRACKS.length})</span>
+            </button>
+            <button
+              type="button"
+              className={`mini-sound-tab-btn ${soundTab === 'nature' ? 'active' : ''}`}
+              onClick={() => setSoundTab('nature')}
+            >
+              <Headphones size={12} />
+              <span>Âm thiên nhiên ({naturePresets.length - 1})</span>
+            </button>
           </div>
 
-          <div className="pip-modal-list sound-list-scroll">
-            {SOUND_PRESETS.map(preset => {
-              const isCurrent = soundMode === preset.id;
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  className={`pip-sound-row ${isCurrent ? 'active' : ''}`}
-                  onClick={() => {
-                    ambientSound.play(preset.id);
+          {soundTab === 'ghibli' ? (
+            <>
+              {/* Currently Playing Card */}
+              <div className="ghibli-now-playing">
+                <div className="ghibli-now-icon">
+                  <span className="flower">🌸</span>
+                </div>
+                <div className="ghibli-now-details">
+                  <strong className="title">{ghibliState.currentTrack.title}</strong>
+                  <span className="film">{ghibliState.currentTrack.film}</span>
+                </div>
+                <div className="ghibli-now-actions">
+                  {/* Shuffle Button */}
+                  <button
+                    type="button"
+                    className={`ghibli-ctrl-btn ${ghibliState.shuffle ? 'active' : ''}`}
+                    onClick={() => ghibliMusic.toggleShuffle()}
+                    title={ghibliState.shuffle ? 'Trộn bài: BẬT' : 'Trộn bài: TẮT'}
+                  >
+                    <Shuffle size={13} />
+                  </button>
+
+                  {/* Previous Track */}
+                  <button
+                    type="button"
+                    className="ghibli-step-btn"
+                    onClick={() => ghibliMusic.prevTrack()}
+                    title="Bài trước"
+                  >
+                    <SkipBack size={13} />
+                  </button>
+
+                  {/* Play / Pause */}
+                  <button
+                    type="button"
+                    className={`ghibli-toggle-btn ${ghibliState.isPlaying ? 'active' : ''}`}
+                    onClick={() => ghibliMusic.toggle()}
+                    title={ghibliState.isPlaying ? 'Tạm dừng nhạc' : 'Phát nhạc'}
+                  >
+                    {ghibliState.isPlaying ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
+                  </button>
+
+                  {/* Next Track */}
+                  <button
+                    type="button"
+                    className="ghibli-step-btn"
+                    onClick={() => ghibliMusic.nextTrack()}
+                    title="Bài kế tiếp"
+                  >
+                    <SkipForward size={13} />
+                  </button>
+
+                  {/* Loop Mode Cycle Button */}
+                  <button
+                    type="button"
+                    className={`ghibli-ctrl-btn ${ghibliState.loopMode !== LOOP_MODE.OFF ? 'active' : ''}`}
+                    onClick={() => ghibliMusic.cycleLoopMode()}
+                    title={
+                      ghibliState.loopMode === LOOP_MODE.ALL
+                        ? 'Lặp: Toàn bộ danh sách'
+                        : ghibliState.loopMode === LOOP_MODE.ONE
+                        ? 'Lặp: 1 bài hát'
+                        : 'Không lặp'
+                    }
+                  >
+                    {ghibliState.loopMode === LOOP_MODE.ONE ? (
+                      <Repeat1 size={13} />
+                    ) : (
+                      <Repeat size={13} />
+                    )}
+                    <span className="ghibli-ctrl-badge">
+                      {ghibliState.loopMode === LOOP_MODE.ALL
+                        ? 'ALL'
+                        : ghibliState.loopMode === LOOP_MODE.ONE
+                        ? '1'
+                        : 'OFF'}
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Playlist Selector Bar */}
+              <div className="ghibli-playlist-bar">
+                {PLAYLISTS.map(pl => {
+                  const isActive = ghibliState.activePlaylist === pl.id;
+                  return (
+                    <button
+                      key={pl.id}
+                      type="button"
+                      className={`ghibli-playlist-pill ${isActive ? 'active' : ''}`}
+                      onClick={() => ghibliMusic.setPlaylist(pl.id)}
+                    >
+                      <span>{pl.icon}</span>
+                      <span>{pl.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Volume Slider */}
+              <div className="pip-sound-volume-bar">
+                <div className="volume-info">
+                  <span>Âm lượng Ghibli</span>
+                  <strong>{Math.round(ghibliState.volume * 100)}%</strong>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={ghibliState.volume}
+                  onChange={e => {
+                    const val = parseFloat(e.target.value);
+                    ghibliMusic.setVolume(val);
                   }}
-                >
-                  <span className={`sound-icon-box ${isCurrent ? 'active' : ''}`}>
-                    {getSoundIcon(preset.id, 14)}
-                  </span>
-                  <div className="sound-text-col">
-                    <span className="sound-title">{preset.name}</span>
-                    <span className="sound-subtitle">{preset.desc}</span>
-                  </div>
-                  {isCurrent && <Check size={14} className="sound-active-check" />}
-                </button>
-              );
-            })}
+                  className="pip-volume-slider"
+                />
+              </div>
+
+              {/* Track List */}
+              <div className="pip-modal-list sound-list-scroll">
+                {filteredGhibliTracks.map((tr) => {
+                  const isCurrent = ghibliState.currentTrack.id === tr.id;
+                  return (
+                    <button
+                      key={tr.id}
+                      type="button"
+                      className={`pip-sound-row ${isCurrent ? 'active' : ''}`}
+                      onClick={() => {
+                        ghibliMusic.play(tr.id);
+                      }}
+                    >
+                      <span className={`sound-icon-box ${isCurrent ? 'active' : ''}`}>
+                        <Music size={13} />
+                      </span>
+                      <div className="sound-text-col">
+                        <span className="sound-title">{tr.title}</span>
+                        <span className="sound-subtitle">{tr.film}</span>
+                      </div>
+                      {isCurrent && ghibliState.isPlaying && (
+                        <span className="mini-eq-bars">
+                          <i className="b1" />
+                          <i className="b2" />
+                          <i className="b3" />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Nature Ambient Sounds View */}
+              <div className="pip-sound-volume-bar">
+                <div className="volume-info">
+                  <span>Âm lượng tiếng ồn nền</span>
+                  <strong>{Math.round(soundVolume * 100)}%</strong>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={soundVolume}
+                  onChange={e => {
+                    const val = parseFloat(e.target.value);
+                    setSoundVolume(val);
+                    ambientSound.setVolume(val);
+                  }}
+                  className="pip-volume-slider"
+                />
+              </div>
+
+              <div className="pip-modal-list sound-list-scroll">
+                {naturePresets.map(preset => {
+                  const isCurrent = soundMode === preset.id;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      className={`pip-sound-row ${isCurrent ? 'active' : ''}`}
+                      onClick={() => {
+                        ambientSound.play(preset.id);
+                      }}
+                    >
+                      <span className={`sound-icon-box ${isCurrent ? 'active' : ''}`}>
+                        {getSoundIcon(preset.id, 14)}
+                      </span>
+                      <div className="sound-text-col">
+                        <span className="sound-title">{preset.name}</span>
+                        <span className="sound-subtitle">{preset.desc}</span>
+                      </div>
+                      {isCurrent && <Check size={14} className="sound-active-check" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Quote Popover */}
+      {quoteMenu && (
+        <div className="mini-quote-popover">
+          <div className="pip-modal-header">
+            <div className="modal-title-with-icon">
+              <Sparkles size={13} className="text-sky-400" />
+              <span>Danh ngôn truyền cảm hứng</span>
+            </div>
+            <button
+              type="button"
+              className="pip-icon-btn"
+              onClick={() => setQuoteMenu(false)}
+            >
+              <X size={13} />
+            </button>
+          </div>
+          <div className="quote-content">
+            <span className="quote-text">“{FAMOUS_QUOTES[quoteIdx].text}”</span>
+            <span className="quote-author">— {FAMOUS_QUOTES[quoteIdx].author}</span>
+          </div>
+          <div className="mini-quote-popover quote-footer">
+            <button
+              type="button"
+              className="mini-quote-cycle-btn"
+              onClick={handleNextQuote}
+            >
+              <span>↻ Đổi câu khác</span>
+            </button>
           </div>
         </div>
       )}
 
-      {/* Safe Reset Confirmation Modal inside Card/Large PiP */}
-      {confirmReset && !isBar && task && (
+      {/* Time Adjust Popover */}
+      {adjustMenu && (
+        <div className="mini-adjust-popover">
+          <div className="pip-modal-header">
+            <span>Chỉnh nhanh thời gian</span>
+            <button
+              type="button"
+              className="pip-icon-btn"
+              onClick={() => setAdjustMenu(false)}
+            >
+              <X size={13} />
+            </button>
+          </div>
+          <div className="mini-adjust-grid">
+            <button
+              type="button"
+              className="mini-adjust-btn"
+              onClick={() => { task && onAdjustTime(task.id, -300); setAdjustMenu(false); }}
+            >
+              -5p
+            </button>
+            <button
+              type="button"
+              className="mini-adjust-btn"
+              onClick={() => { task && onAdjustTime(task.id, -60); setAdjustMenu(false); }}
+            >
+              -1p
+            </button>
+            <button
+              type="button"
+              className="mini-adjust-btn"
+              onClick={() => { task && onAdjustTime(task.id, 60); setAdjustMenu(false); }}
+            >
+              +1p
+            </button>
+            <button
+              type="button"
+              className="mini-adjust-btn"
+              onClick={() => { task && onAdjustTime(task.id, 300); setAdjustMenu(false); }}
+            >
+              +5p
+            </button>
+          </div>
+          <form onSubmit={handleCustomSubmit} className="mini-adjust-custom-form">
+            <input
+              type="number"
+              min="1"
+              max="1440"
+              value={inputVal}
+              onChange={e => setInputVal(e.target.value)}
+              placeholder="Số phút"
+            />
+            <button type="submit">Đặt</button>
+          </form>
+        </div>
+      )}
+
+      {/* Safe Reset Confirmation Modal */}
+      {confirmReset && task && (
         <div className="pip-confirm-overlay">
           <div className="pip-confirm-box">
             <span className="pip-confirm-title">Đặt lại phiên này?</span>
@@ -384,7 +680,9 @@ export default function PipFloatingTimer({
 
       {/* Layout Content */}
       {isBar ? (
-        /* COMPACT / BAR VIEW */
+        /* ======================================================== */
+        /* COMPACT / BAR VIEW — TỐI ƯU TOÀN DIỆN VỚI ĐỦ TÍNH NĂNG     */
+        /* ======================================================== */
         <div className="pip-bar-view">
           {confirmReset ? (
             <div className="pip-bar-confirm">
@@ -392,14 +690,14 @@ export default function PipFloatingTimer({
               <div className="confirm-actions">
                 <button
                   type="button"
-                  className="pip-confirm-btn sm cancel"
+                  className="confirm-btn-pill cancel"
                   onClick={() => setConfirmReset(false)}
                 >
                   Hủy
                 </button>
                 <button
                   type="button"
-                  className="pip-confirm-btn sm confirm"
+                  className="confirm-btn-pill danger"
                   onClick={() => {
                     setConfirmReset(false);
                     if (task) onReset(task.id);
@@ -411,58 +709,173 @@ export default function PipFloatingTimer({
             </div>
           ) : (
             <>
-              {/* Task switcher directly in bar */}
+              {/* 1. Trái: Task selector chip */}
               <button
                 type="button"
                 className="pip-task-chip"
-                onClick={() => setTaskPicker(!taskPicker)}
+                onClick={() => {
+                  setTaskPicker(!taskPicker);
+                  setSoundPicker(false);
+                  setAdjustMenu(false);
+                  setQuoteMenu(false);
+                }}
                 disabled={!task}
-                title="Bấm để đổi việc nhanh"
+                title="Bấm để đổi nhanh công việc"
               >
+                <span
+                  className={`status-pulse-dot ${status}`}
+                  style={{ '--dot-color': task?.color || 'var(--accent)' }}
+                />
                 <span className="emoji">{task?.emoji || '✦'}</span>
                 <span className="name">{task?.name || 'Chưa chọn'}</span>
                 <ChevronDown size={11} className="chevron" />
               </button>
 
+              {/* 2. Giữa: Visual Orb + Digits + Progress % */}
               <div className="pip-bar-center">
+                {/* Visual Orb: Click to cycle Hourglass / Ring / Digits */}
+                <button
+                  type="button"
+                  className={`mini-visual-orb ${status === 'running' ? 'running' : ''}`}
+                  onClick={cycleVisualMode}
+                  title={`Hiệu ứng: ${visualMode === 'hourglass' ? 'Đồng hồ cát' : visualMode === 'ring' ? 'Vòng sáng' : 'Chữ số'} (Bấm để đổi)`}
+                >
+                  {visualMode === 'hourglass' ? (
+                    <svg className="mini-hourglass-svg-sm" viewBox="0 0 100 110" aria-hidden="true">
+                      <defs>
+                        <clipPath id={`${clipId}-sm`}>
+                          <path d="M22 12H78V25C78 39 58 45 53 54C58 65 78 70 78 85V98H22V85C22 70 42 65 47 54C42 45 22 39 22 25Z" />
+                        </clipPath>
+                      </defs>
+                      <g clipPath={`url(#${clipId}-sm)`}>
+                        <rect x="15" y={54 - fraction * 42} width="70" height={fraction * 42} fill="var(--accent)" opacity="0.8" />
+                        <rect x="15" y={98 - (1 - fraction) * 42} width="70" height={(1 - fraction) * 42} fill="var(--accent)" />
+                        {status === 'running' && (
+                          <path d={`M50 54V${98 - (1 - fraction) * 42}`} stroke="var(--accent)" strokeWidth="3" strokeDasharray="2 3" />
+                        )}
+                      </g>
+                      <path d="M22 12H78V25C78 39 58 45 53 54C58 65 78 70 78 85V98H22V85C22 70 42 65 47 54C42 45 22 39 22 25Z" fill="none" stroke="currentColor" strokeOpacity="0.4" strokeWidth="2.5" />
+                      <path d="M17 9H83M17 101H83" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
+                    </svg>
+                  ) : visualMode === 'ring' ? (
+                    <svg className="mini-ring-svg-sm" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="40" className="ring-track" />
+                      <circle
+                        cx="50"
+                        cy="50"
+                        r="40"
+                        className="ring-progress"
+                        stroke="var(--accent)"
+                        strokeDasharray={2 * Math.PI * 40}
+                        strokeDashoffset={2 * Math.PI * 40 * (1 - fraction)}
+                        transform="rotate(-90 50 50)"
+                      />
+                    </svg>
+                  ) : (
+                    <Clock size={13} />
+                  )}
+                </button>
+
+                {/* Main Digits */}
                 <span className={`pip-digits-bar ${status === 'running' ? 'running' : ''}`}>
                   {formatRemaining(left)}
                 </span>
-                <span className={`pip-status-dot ${status}`} />
+
+                {/* Percentage Badge */}
+                <span className={`mini-percent-badge ${status === 'running' ? 'running' : ''}`}>
+                  {Math.round(percent)}%
+                </span>
               </div>
 
+              {/* 3. Phải: Music Hub, Adjust, Quote, Reset, Play/Pause, Controls */}
               <div className="pip-bar-actions">
-                {/* Ghibli Music / Ambient Sound Cycle */}
+                {/* Ghibli Music & Sound Hub Button */}
                 <button
                   type="button"
-                  className={`adjust-pill ${soundMode !== 'off' ? 'active' : ''}`}
-                  onClick={handleSoundCycle}
-                  title={`Âm thanh: ${currentPreset?.name} (Bấm để chuyển âm Ghibli / thiên nhiên)`}
+                  className={`mini-ghibli-btn ${ghibliState.isPlaying ? 'playing' : ''}`}
+                  onClick={() => {
+                    setSoundPicker(!soundPicker);
+                    setTaskPicker(false);
+                    setAdjustMenu(false);
+                    setQuoteMenu(false);
+                  }}
+                  title={
+                    ghibliState.isPlaying
+                      ? `Đang phát: ${ghibliState.currentTrack.title} — Bấm để chọn danh sách / trộn bài / lặp`
+                      : 'Bật nhạc Ghibli Lofi & Âm tập trung'
+                  }
                 >
-                  {getSoundIcon(soundMode, 11)}
-                  <span>{currentPreset?.label || 'Âm'}</span>
+                  <Music size={12} />
+                  {ghibliState.isPlaying ? (
+                    <span className="mini-eq-bars">
+                      <i className="b1" />
+                      <i className="b2" />
+                      <i className="b3" />
+                    </span>
+                  ) : (
+                    <span>Ghibli</span>
+                  )}
                 </button>
 
+                {/* Time Adjust: Quick +5p + Dropdown trigger */}
                 <button
                   type="button"
                   className="adjust-pill"
                   disabled={!task}
                   onClick={() => task && onAdjustTime(task.id, 300)}
-                  title="Cộng 5 phút"
+                  onContextMenu={e => {
+                    e.preventDefault();
+                    setAdjustMenu(!adjustMenu);
+                    setSoundPicker(false);
+                    setTaskPicker(false);
+                    setQuoteMenu(false);
+                  }}
+                  title="Cộng 5 phút (Chuột phải hoặc bấm mũi tên để mở menu chỉnh giờ)"
                 >
                   +5p
                 </button>
+                <button
+                  type="button"
+                  className="pip-icon-btn"
+                  style={{ width: 18, height: 24, padding: 0 }}
+                  onClick={() => {
+                    setAdjustMenu(!adjustMenu);
+                    setSoundPicker(false);
+                    setTaskPicker(false);
+                    setQuoteMenu(false);
+                  }}
+                  title="Tùy chọn chỉnh giờ (-5p, -1p, +1p, +5p, sửa phút)"
+                >
+                  <ChevronDown size={11} />
+                </button>
 
+                {/* Inspirational Quote Sparkle Button */}
+                <button
+                  type="button"
+                  className={`mini-quote-btn ${quoteMenu ? 'active' : ''}`}
+                  onClick={() => {
+                    setQuoteMenu(!quoteMenu);
+                    setSoundPicker(false);
+                    setTaskPicker(false);
+                    setAdjustMenu(false);
+                  }}
+                  title={`Danh ngôn: “${FAMOUS_QUOTES[quoteIdx].text}” — ${FAMOUS_QUOTES[quoteIdx].author}`}
+                >
+                  <Sparkles size={12} />
+                </button>
+
+                {/* Safe Reset Button */}
                 <button
                   type="button"
                   className="pip-reset-btn sm"
                   disabled={!task}
                   onClick={handleResetClick}
-                  title="Đặt lại phiên"
+                  title="Đặt lại phiên này"
                 >
                   <RotateCcw size={13} />
                 </button>
 
+                {/* Master Play / Pause Button */}
                 <button
                   type="button"
                   className="pip-play-btn sm"
@@ -479,6 +892,7 @@ export default function PipFloatingTimer({
                   )}
                 </button>
 
+                {/* Size Controls */}
                 <div className="pip-size-controls sm">
                   <button
                     type="button"
@@ -488,8 +902,17 @@ export default function PipFloatingTimer({
                   >
                     Thẻ
                   </button>
+                  <button
+                    type="button"
+                    className="pip-size-btn"
+                    onClick={() => handleSizeSelect('large')}
+                    title="Mở rộng sang Lớn"
+                  >
+                    Lớn
+                  </button>
                 </div>
 
+                {/* Close Button */}
                 <button
                   type="button"
                   className="pip-icon-btn close-pip"
@@ -503,7 +926,9 @@ export default function PipFloatingTimer({
           )}
         </div>
       ) : (
-        /* CARD & LARGE VIEW */
+        /* ======================================================== */
+        /* CARD & LARGE VIEW                                        */
+        /* ======================================================== */
         <>
           {/* Header */}
           <header className="pip-header">
@@ -541,20 +966,22 @@ export default function PipFloatingTimer({
 
               <button
                 type="button"
-                className={`pip-tool-btn ${soundMode !== 'off' ? 'active' : ''}`}
+                className={`pip-tool-btn ${soundMode !== 'off' || ghibliState.isPlaying ? 'active' : ''}`}
                 onClick={() => {
                   setSoundPicker(!soundPicker);
                   setTaskPicker(false);
                 }}
                 title={
-                  soundMode === 'off'
-                    ? 'Bật âm thanh tập trung (10 loại: Tiếng ồn nâu, Sóng não Alpha, Mưa rào, Bếp lửa, Sóng biển, Rừng thông, Cà phê...)'
-                    : `Đang phát: ${currentPreset?.name} (Bấm để chọn 10 loại âm hoặc chỉnh âm lượng)`
+                  ghibliState.isPlaying
+                    ? `Đang phát Ghibli: ${ghibliState.currentTrack.title}`
+                    : soundMode === 'off'
+                    ? 'Bật âm thanh tập trung & nhạc Ghibli'
+                    : `Đang phát: ${currentPreset?.name}`
                 }
               >
-                {getSoundIcon(soundMode, 13)}
+                {ghibliState.isPlaying ? <Music size={13} className="text-amber-400" /> : getSoundIcon(soundMode, 13)}
                 <span className="tool-label">
-                  {currentPreset?.label || 'Âm'}
+                  {ghibliState.isPlaying ? 'Ghibli' : currentPreset?.label || 'Âm'}
                 </span>
               </button>
             </div>
@@ -653,7 +1080,6 @@ export default function PipFloatingTimer({
           <div className="pip-body">
             <div className="pip-display-flex">
               {visualMode === 'hourglass' && (
-                /* Animated Mini Hourglass (Đồng hồ cát) */
                 <div className="pip-hourglass-wrap" title="Đồng hồ cát đang chảy">
                   <svg className="pip-hourglass-svg" viewBox="0 0 100 110" aria-hidden="true">
                     <defs>
@@ -662,7 +1088,6 @@ export default function PipFloatingTimer({
                       </clipPath>
                     </defs>
                     <g clipPath={`url(#${clipId})`}>
-                      {/* Top Sand chamber decreasing */}
                       <rect
                         x="15"
                         y={54 - fraction * 42}
@@ -671,7 +1096,6 @@ export default function PipFloatingTimer({
                         fill="var(--accent)"
                         opacity="0.8"
                       />
-                      {/* Bottom Sand chamber filling up */}
                       <rect
                         x="15"
                         y={98 - (1 - fraction) * 42}
@@ -679,7 +1103,6 @@ export default function PipFloatingTimer({
                         height={(1 - fraction) * 42}
                         fill="var(--accent)"
                       />
-                      {/* Streaming sand trickle when running */}
                       {status === 'running' && (
                         <path
                           className="pip-sand-stream"
@@ -690,7 +1113,6 @@ export default function PipFloatingTimer({
                         />
                       )}
                     </g>
-                    {/* Hourglass glass outline */}
                     <path
                       d="M22 12H78V25C78 39 58 45 53 54C58 65 78 70 78 85V98H22V85C22 70 42 65 47 54C42 45 22 39 22 25Z"
                       fill="none"
@@ -709,7 +1131,6 @@ export default function PipFloatingTimer({
               )}
 
               {visualMode === 'ring' && (
-                /* Animated Mini Orbit Ring */
                 <div className="pip-ring-wrap">
                   <svg className="pip-ring-svg" viewBox="0 0 100 100">
                     <circle cx="50" cy="50" r="42" className="ring-track" />

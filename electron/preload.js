@@ -16,5 +16,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   close: () => ipcRenderer.send('window:close'),
   saveData: data => ipcRenderer.invoke('storage:save', data),
   loadData: () => ipcRenderer.invoke('storage:load'),
+  setHeight: height => ipcRenderer.invoke('window:set-height', height),
   notify: (title, body) => ipcRenderer.invoke('notification:send', { title, body }),
 });

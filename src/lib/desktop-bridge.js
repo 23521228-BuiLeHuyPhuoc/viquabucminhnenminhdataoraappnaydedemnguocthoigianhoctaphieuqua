@@ -4,6 +4,7 @@ export const desktopBridge = {
   setWindowMode: mode => window.electronAPI?.setWindowMode(mode),
   setAlwaysOnTop: pinned => window.electronAPI?.setAlwaysOnTop(pinned),
   snapToCorner: corner => window.electronAPI?.snapToCorner(corner),
+  setHeight: height => window.electronAPI?.setHeight(height),
   minimize: () => window.electronAPI?.minimize(),
   close: () => window.electronAPI?.close(),
   async sendNotification(title, body) {
