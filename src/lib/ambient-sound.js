@@ -13,18 +13,33 @@ let volume = 0.35;
 let tickTimer = null;
 let secondaryTimer = null;
 
+import { ghibliMusic, GHIBLI_TRACKS } from './ghibli-music.js';
+
+let listeners = new Set();
+
 export const SOUND_PRESETS = [
-  { id: 'off', name: 'Tắt âm', label: 'Tắt', icon: 'VolumeX', desc: 'Không phát âm thanh nền' },
-  { id: 'brown', name: 'Tiếng ồn nâu (Brown Noise)', label: 'Nâu', icon: 'Headphones', desc: 'Sâu lắng, ấm áp, #1 chặn tạp âm & làm dịu tâm trí (ADHD & Deep Work)' },
-  { id: 'binaural', name: 'Sóng não Alpha 10Hz', label: 'Alpha', icon: 'Activity', desc: 'Kích hoạt trạng thái dòng chảy (Flow State) chuẩn khoa học Brain.fm/Endel' },
-  { id: 'rain', name: 'Mưa rào & sấm xa', label: 'Mưa', icon: 'CloudRain', desc: 'Tiếng mưa rơi êm đềm với tiếng sấm rền xa xa thư thái (Noisli / Tide)' },
-  { id: 'fireplace', name: 'Bếp lửa bập bùng', label: 'Lửa', icon: 'Flame', desc: 'Tiếng củi cháy tí tách, than hồng ấm cúng như thư viện mùa đông' },
-  { id: 'waves', name: 'Sóng biển Zen', label: 'Sóng', icon: 'Waves', desc: 'Sóng xô bờ dập dềnh nhịp nhàng, điều hòa nhịp tim & hơi thở' },
-  { id: 'forest', name: 'Gió rừng thông', label: 'Rừng', icon: 'Trees', desc: 'Gió thổi qua tán thông rì rào và âm vang thiên nhiên thanh mát' },
-  { id: 'cafe', name: 'Quán cà phê mộc', label: 'Cà phê', icon: 'Coffee', desc: 'Không khí quán quen, tiếng tách gốm và hơi ấm quen thuộc (Coffitivity)' },
-  { id: 'bowl', name: 'Chuông thiền 432Hz', label: 'Thiền', icon: 'Bell', desc: 'Tần số Solfeggio thanh lọc tâm trí, xóa tan căng thẳng và áp lực' },
-  { id: 'clock', name: 'Tích tắc nhịp điệu', label: 'Đồng hồ', icon: 'Clock', desc: 'Nhịp gõ chuẩn mực giữ nhịp độ học tập kỷ luật kiểu Pomodoro' },
-  { id: 'white', name: 'Tiếng ồn trắng', label: 'Trắng', icon: 'Wind', desc: 'Thác đổ đều đặn, lọc sạch hoàn toàn tiếng ồn xung quanh' },
+  { id: 'off', name: 'Tắt âm', label: 'Tắt', icon: 'VolumeX', desc: 'Không phát âm thanh nền', category: 'nature' },
+  // Studio Ghibli Lo-fi & Piano Focus Tracks & Live Streams
+  ...GHIBLI_TRACKS.map(t => ({
+    id: t.id,
+    name: t.isLive ? `[LIVE] ${t.title}` : t.title,
+    label: t.title.split('(')[0].replace(/\[LIVE\]\s*/, '').trim(),
+    icon: 'Music',
+    desc: `${t.film} — ${t.desc}`,
+    category: 'ghibli',
+    isLive: !!t.isLive,
+  })),
+  // World-renowned ambient soundscapes
+  { id: 'brown', name: 'Tiếng ồn nâu (Brown Noise)', label: 'Nâu', icon: 'Headphones', desc: 'Sâu lắng, ấm áp, #1 chặn tạp âm & làm dịu tâm trí (ADHD & Deep Work)', category: 'nature' },
+  { id: 'binaural', name: 'Sóng não Alpha 10Hz', label: 'Alpha', icon: 'Activity', desc: 'Kích hoạt trạng thái dòng chảy (Flow State) chuẩn khoa học Brain.fm/Endel', category: 'nature' },
+  { id: 'rain', name: 'Mưa rào & sấm xa', label: 'Mưa', icon: 'CloudRain', desc: 'Tiếng mưa rơi êm đềm với tiếng sấm rền xa xa thư thái (Noisli / Tide)', category: 'nature' },
+  { id: 'fireplace', name: 'Bếp lửa bập bùng', label: 'Lửa', icon: 'Flame', desc: 'Tiếng củi cháy tí tách, than hồng ấm cúng như thư viện mùa đông', category: 'nature' },
+  { id: 'waves', name: 'Sóng biển Zen', label: 'Sóng', icon: 'Waves', desc: 'Sóng xô bờ dập dềnh nhịp nhàng, điều hòa nhịp tim & hơi thở', category: 'nature' },
+  { id: 'forest', name: 'Gió rừng thông', label: 'Rừng', icon: 'Trees', desc: 'Gió thổi qua tán thông rì rào và âm vang thiên nhiên thanh mát', category: 'nature' },
+  { id: 'cafe', name: 'Quán cà phê mộc', label: 'Cà phê', icon: 'Coffee', desc: 'Không khí quán quen, tiếng tách gốm và hơi ấm quen thuộc (Coffitivity)', category: 'nature' },
+  { id: 'bowl', name: 'Chuông thiền 432Hz', label: 'Thiền', icon: 'Bell', desc: 'Tần số Solfeggio thanh lọc tâm trí, xóa tan căng thẳng và áp lực', category: 'nature' },
+  { id: 'clock', name: 'Tích tắc nhịp điệu', label: 'Đồng hồ', icon: 'Clock', desc: 'Nhịp gõ chuẩn mực giữ nhịp độ học tập kỷ luật kiểu Pomodoro', category: 'nature' },
+  { id: 'white', name: 'Tiếng ồn trắng', label: 'Trắng', icon: 'Wind', desc: 'Thác đổ đều đặn, lọc sạch hoàn toàn tiếng ồn xung quanh', category: 'nature' },
 ];
 
 function getAudioContext() {
@@ -464,30 +479,62 @@ export const ambientSound = {
   getVolume: () => volume,
   getPresets: () => SOUND_PRESETS,
 
+  subscribe: listener => {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  },
+
+  notify: () => {
+    listeners.forEach(fn => {
+      try { fn(currentSoundType); } catch (e) {}
+    });
+  },
+
   setVolume: newVol => {
     volume = Math.max(0, Math.min(1, newVol));
     if (masterGain && audioCtx) {
       masterGain.gain.setValueAtTime(volume, audioCtx.currentTime);
     }
+    ghibliMusic.setVolume(volume);
+    ambientSound.notify();
   },
 
   play: type => {
-    const ctx = getAudioContext();
-    if (!ctx) return;
+    // If clicking the currently playing sound, toggle it off!
+    if (type === currentSoundType && type !== 'off') {
+      ambientSound.stop();
+      return 'off';
+    }
 
-    // Clean up active sound
+    // Clean up active sound without desyncing
     ambientSound.stop();
 
     if (type === 'off') {
       currentSoundType = 'off';
-      return;
+      ambientSound.notify();
+      return 'off';
+    }
+
+    currentSoundType = type;
+
+    // Handle Ghibli tracks
+    if (type.startsWith('ghibli_')) {
+      ghibliMusic.setVolume(volume);
+      ghibliMusic.isAutoShuffle = false;
+      ghibliMusic.play(type);
+      ambientSound.notify();
+      return currentSoundType;
+    }
+
+    const ctx = getAudioContext();
+    if (!ctx) {
+      ambientSound.notify();
+      return currentSoundType;
     }
 
     masterGain = ctx.createGain();
     masterGain.gain.setValueAtTime(volume, ctx.currentTime);
     masterGain.connect(ctx.destination);
-
-    currentSoundType = type;
 
     switch (type) {
       case 'brown':
@@ -524,9 +571,14 @@ export const ambientSound = {
         currentSoundType = 'off';
         break;
     }
+
+    ambientSound.notify();
+    return currentSoundType;
   },
 
   stop: () => {
+    ghibliMusic.stop();
+
     if (tickTimer) {
       clearInterval(tickTimer);
       tickTimer = null;
@@ -552,6 +604,8 @@ export const ambientSound = {
     }
 
     currentSoundType = 'off';
+    ambientSound.notify();
+    return 'off';
   },
 
   toggleNext: () => {

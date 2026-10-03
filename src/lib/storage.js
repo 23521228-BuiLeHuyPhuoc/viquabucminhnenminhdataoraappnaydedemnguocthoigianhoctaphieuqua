@@ -4,7 +4,7 @@ export const STORAGE_KEY = 'flow_timer_app_data_v1';
 export const DEFAULT_STATE = {
   version: SCHEMA_VERSION, tasks: DEFAULT_TASKS, selectedTaskId: 'english', theme: 'dark',
   soundEnabled: true, desktopNotifications: false, reducedMotion: false,
-  miniDisplayMode: 'card', isPinned: true, handledSessionIds: [], visualMode: 'ring',
+  miniDisplayMode: 'bar', isPinned: true, handledSessionIds: [], visualMode: 'ring',
 };
 const text = (value, fallback, max = 100) => typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : fallback;
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));

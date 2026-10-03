@@ -12,7 +12,7 @@ const indexURL = pathToFileURL(indexPath).href;
 const SIZES = {
   full: { width: 1080, height: 760, minWidth: 520, minHeight: 480 },
   'mini-card': { width: 340, height: 220, minWidth: 260, minHeight: 160 },
-  'mini-bar': { width: 390, height: 84, minWidth: 280, minHeight: 64 },
+  'mini-bar': { width: 440, height: 76, minWidth: 320, minHeight: 60 },
 };
 
 let win, mode = 'full', pinned = true, bounds = {}, quitting = false, closePending = false, allowClose = false;

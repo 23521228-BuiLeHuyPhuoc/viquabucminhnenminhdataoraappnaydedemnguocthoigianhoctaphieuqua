@@ -25,8 +25,13 @@ import {
   SlidersHorizontal,
   Sun,
   Trash2,
+  Volume1,
   Volume2,
   VolumeX,
+  Music,
+  SkipForward,
+  SkipBack,
+  Sparkles,
   X
 } from 'lucide-react';
 import useFlowTimer from '../hooks/useFlowTimer';
@@ -35,6 +40,7 @@ import { formatRemaining, formatDurationShort, parseDuration } from '../lib/time
 import { desktopBridge } from '../lib/desktop-bridge.js';
 import { playCompletionSound } from '../lib/sound.js';
 import { ambientSound, SOUND_PRESETS } from '../lib/ambient-sound.js';
+import { ghibliMusic, GHIBLI_TRACKS } from '../lib/ghibli-music.js';
 import AmbientBackground from './AmbientBackground';
 import PipFloatingTimer, { FAMOUS_QUOTES } from './PipFloatingTimer';
 
@@ -331,17 +337,55 @@ function Settings({ state, update, close }) {
 function AmbientSoundModal({ onClose }) {
   const [current, setCurrent] = useState(ambientSound.getSound());
   const [vol, setVol] = useState(ambientSound.getVolume());
+  const [activeTab, setActiveTab] = useState(current.startsWith('ghibli_') ? 'ghibli' : 'nature');
+
+  useEffect(() => {
+    return ambientSound.subscribe(newType => {
+      setCurrent(newType);
+      setVol(ambientSound.getVolume());
+    });
+  }, []);
+
+  const ghibliList = SOUND_PRESETS.filter(p => p.category === 'ghibli');
+  const natureList = SOUND_PRESETS.filter(p => p.category === 'nature');
 
   return (
-    <Dialog title="Âm thanh tập trung (10 loại soundscapes)" onClose={onClose}>
+    <Dialog title="Không gian âm thanh học tập & tập trung" onClose={onClose}>
       <div className="ambient-modal-intro">
-        <p>Tuyển tập 10 loại âm thanh chuẩn khoa học (Brain.fm, Noisli, Endel, Tide) giúp kích hoạt dòng chảy (Flow State) và ngăn chặn phân tâm.</p>
+        <p>Tuyển tập 25 bản nhạc Piano Ghibli chính thức & các đài phát thanh 24/7 trực tiếp cùng âm thanh thiên nhiên chuẩn khoa học, giúp tâm trí tĩnh lặng và đạt trạng thái tập trung sâu.</p>
+      </div>
+
+      <div className="ambient-tabs no-drag">
+        <button
+          type="button"
+          className={`ambient-tab-btn ${activeTab === 'ghibli' ? 'active' : ''}`}
+          onClick={() => setActiveTab('ghibli')}
+        >
+          <Music size={15} />
+          <span>Nhạc Ghibli ({ghibliList.length})</span>
+        </button>
+        <button
+          type="button"
+          className={`ambient-tab-btn ${activeTab === 'nature' ? 'active' : ''}`}
+          onClick={() => setActiveTab('nature')}
+        >
+          <Volume2 size={15} />
+          <span>Âm thiên nhiên & Sóng não ({natureList.length})</span>
+        </button>
       </div>
 
       <div className="ambient-volume-slider-box">
         <div className="volume-header">
-          <span>Âm lượng âm thanh nền</span>
-          <strong>{Math.round(vol * 100)}%</strong>
+          <span>Âm lượng âm thanh ({Math.round(vol * 100)}%)</span>
+          <button
+            type="button"
+            className="text-xs text-muted hover:text-white underline cursor-pointer"
+            onClick={() => {
+              ambientSound.stop();
+            }}
+          >
+            Tắt toàn bộ âm
+          </button>
         </div>
         <input
           type="range"
@@ -359,23 +403,30 @@ function AmbientSoundModal({ onClose }) {
       </div>
 
       <div className="ambient-presets-grid">
-        {SOUND_PRESETS.map(preset => {
+        {(activeTab === 'ghibli' ? ghibliList : natureList).map(preset => {
           const isActive = current === preset.id;
           return (
             <button
               key={preset.id}
               type="button"
-              className={`ambient-preset-card ${isActive ? 'active' : ''}`}
+              className={`ambient-preset-card ${isActive ? 'active' : ''} ${preset.category === 'ghibli' ? 'ghibli-card' : ''}`}
               onClick={() => {
                 ambientSound.play(preset.id);
-                setCurrent(preset.id);
               }}
             >
               <div className="card-top">
                 <span className={`preset-badge ${isActive ? 'active' : ''}`}>
                   {preset.label}
                 </span>
-                {isActive && <span className="playing-pulse">● Đang phát</span>}
+                {isActive ? (
+                  <span className="playing-pulse">● Đang phát</span>
+                ) : (
+                  preset.category === 'ghibli' && (
+                    <span className="ghibli-film-tag">
+                      {preset.isLive ? '🔴 LIVE' : '🌸 Ghibli'}
+                    </span>
+                  )
+                )}
               </div>
               <strong className="preset-card-name">{preset.name}</strong>
               <p className="preset-card-desc">{preset.desc}</p>
@@ -482,12 +533,25 @@ function TimerVisual({ fraction, status, mode, children }) {
 
 /**
  * MiniTimer - Floating desktop widget
- * Supports time adjustments (+5p, -5p), resizing, task switching, and controls.
+ * Specialized for Slim Bar mode: streamlined, distraction-free, essential focus tools & Ghibli Lofi music.
  */
 function MiniTimer({ flow, task, desktop, visualState, onToggle, onReset, onAdjustTime }) {
   const { state, now, windowState } = flow;
   const [corners, setCorners] = useState(false);
   const [taskPicker, setTaskPicker] = useState(false);
+  const [ghibliMenu, setGhibliMenu] = useState(false);
+  const [adjustMenu, setAdjustMenu] = useState(false);
+
+  const [ghibliState, setGhibliState] = useState({
+    isPlaying: ghibliMusic.getIsPlaying(),
+    track: ghibliMusic.getCurrentTrack(),
+    volume: ghibliMusic.getVolume(),
+  });
+
+  useEffect(() => {
+    return ghibliMusic.subscribe(info => setGhibliState(info));
+  }, []);
+
   const bar = windowState.mode === 'mini-bar';
   const status = getTaskStatus(task, now);
   const left = getRemainingSeconds(task, now);
@@ -510,7 +574,7 @@ function MiniTimer({ flow, task, desktop, visualState, onToggle, onReset, onAdju
         {taskPicker && (
           <div className="mini-task-menu no-drag" role="menu">
             <div className="mini-task-menu-header">
-              <span>Đổi công việc</span>
+              <span>Đổi công việc học tập</span>
               <IconButton title="Đóng danh sách" onClick={() => setTaskPicker(false)}>
                 <X size={14} />
               </IconButton>
@@ -540,97 +604,250 @@ function MiniTimer({ flow, task, desktop, visualState, onToggle, onReset, onAdju
           </div>
         )}
 
+        {/* Ghibli Music Mini Player Popover */}
+        {ghibliMenu && (
+          <div className="mini-ghibli-popover no-drag" role="dialog">
+            <div className="mini-ghibli-popover-header">
+              <div className="flex items-center gap-1.5">
+                <Music size={14} className="text-amber-400" />
+                <strong>Nhạc Ghibli Lofi</strong>
+              </div>
+              <IconButton title="Đóng" onClick={() => setGhibliMenu(false)}>
+                <X size={13} />
+              </IconButton>
+            </div>
+
+            {/* Currently playing track info */}
+            <div className="ghibli-now-playing">
+              <div className="ghibli-now-icon">
+                <span className="flower">🌸</span>
+              </div>
+              <div className="ghibli-now-details">
+                <strong className="title">{ghibliState.track.title}</strong>
+                <span className="film">{ghibliState.track.film}</span>
+              </div>
+              <div className="ghibli-now-actions">
+                <button
+                  type="button"
+                  className="ghibli-step-btn"
+                  onClick={() => ghibliMusic.prevTrack()}
+                  title="Bài trước"
+                >
+                  <SkipBack size={13} />
+                </button>
+                <button
+                  type="button"
+                  className={`ghibli-toggle-btn ${ghibliState.isPlaying ? 'active' : ''}`}
+                  onClick={() => ghibliMusic.toggle()}
+                  title={ghibliState.isPlaying ? 'Tạm dừng nhạc' : 'Phát nhạc'}
+                >
+                  {ghibliState.isPlaying ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
+                </button>
+                <button
+                  type="button"
+                  className="ghibli-step-btn"
+                  onClick={() => ghibliMusic.nextTrack()}
+                  title="Bài kế tiếp"
+                >
+                  <SkipForward size={13} />
+                </button>
+              </div>
+            </div>
+
+            {/* Volume mini slider */}
+            <div className="ghibli-volume-row">
+              <Volume1 size={12} className="text-muted" />
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={ghibliState.volume}
+                onChange={e => ghibliMusic.setVolume(parseFloat(e.target.value))}
+                className="ghibli-volume-slider"
+                title="Âm lượng nhạc Ghibli"
+              />
+              <span className="text-[10px] text-muted">{Math.round(ghibliState.volume * 100)}%</span>
+            </div>
+
+            {/* Track selector list */}
+            <div className="ghibli-track-list">
+              {GHIBLI_TRACKS.map((tr, idx) => {
+                const isThis = ghibliState.track.id === tr.id;
+                return (
+                  <button
+                    key={tr.id}
+                    type="button"
+                    className={`ghibli-track-item ${isThis ? 'active' : ''}`}
+                    onClick={() => {
+                      ghibliMusic.play(idx);
+                    }}
+                  >
+                    <span className="track-bullet">{isThis && ghibliState.isPlaying ? '▶' : '♫'}</span>
+                    <div className="track-names">
+                      <strong>{tr.title}</strong>
+                      <small>{tr.film}</small>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {bar ? (
-          /* Mini Bar Layout */
+          /* ======================================================== */
+          /* SLIM BAR LAYOUT: Chỉ hiển thị các yếu tố THỰC SỰ CẦN THIẾT */
+          /* ======================================================== */
           <div className="mini-bar-content drag-region">
-            <div className="mini-bar-left">
+            {/* 1. Trái: Task button & Status pulse */}
+            <div className="mini-bar-left no-drag">
               <button
                 type="button"
-                className="mini-bar-task-btn no-drag"
+                className="mini-bar-task-btn"
                 onClick={() => setTaskPicker(!taskPicker)}
-                title="Đổi công việc"
+                title="Bấm để đổi nhanh công việc"
               >
-                <span className="status-dot" style={{ color: task?.color }} />
+                <span
+                  className={`status-pulse-dot ${status}`}
+                  style={{ '--dot-color': task?.color || 'var(--accent)' }}
+                />
                 <span className="task-emoji-sm">{task?.emoji || '✦'}</span>
-                <span className="mini-bar-task">{task?.name || 'Chưa chọn việc'}</span>
+                <span className="mini-bar-task" title={task?.name}>
+                  {task?.name || 'Chưa chọn việc'}
+                </span>
                 <ChevronDown size={12} className="chevron" />
               </button>
             </div>
 
-            <div className="mini-bar-time drag-region" title={STATUS[status]}>
+            {/* 2. Giữa: Chữ số thời gian to rõ nét */}
+            <div
+              className={`mini-bar-time drag-region ${status === 'running' ? 'running' : ''}`}
+              title={STATUS[status]}
+            >
               {formatRemaining(left)}
             </div>
 
+            {/* 3. Phải: Ghibli Music, +5p, Reset, Play/Pause, Tools */}
             <div className="mini-bar-actions no-drag">
+              {/* Nút Nghe nhạc Ghibli */}
               <button
                 type="button"
-                className="adjust-pill"
-                onClick={() => onAdjustTime(task?.id, 300)}
-                title="Cộng 5 phút"
+                className={`mini-ghibli-btn ${ghibliState.isPlaying ? 'playing' : ''}`}
+                onClick={() => setGhibliMenu(!ghibliMenu)}
+                title={
+                  ghibliState.isPlaying
+                    ? `Đang phát: ${ghibliState.track.title} - Bấm để xem danh sách / chỉnh âm lượng`
+                    : 'Bật nhạc Ghibli Lofi thư giãn'
+                }
               >
-                +5p
+                <Music size={13} />
+                {ghibliState.isPlaying ? (
+                  <span className="mini-eq-bars">
+                    <i className="b1" />
+                    <i className="b2" />
+                    <i className="b3" />
+                  </span>
+                ) : (
+                  <span className="mini-ghibli-text">Ghibli</span>
+                )}
               </button>
 
+              {/* Nút Chỉnh nhanh thời gian */}
+              <div className="mini-adjust-wrap">
+                <button
+                  type="button"
+                  className="adjust-pill-bar"
+                  onClick={() => onAdjustTime(task?.id, 300)}
+                  onContextMenu={e => {
+                    e.preventDefault();
+                    setAdjustMenu(!adjustMenu);
+                  }}
+                  title="Cộng 5 phút (Chuột phải để chọn thêm)"
+                >
+                  +5p
+                </button>
+                {adjustMenu && (
+                  <div className="mini-adjust-popover">
+                    <button type="button" onClick={() => { onAdjustTime(task?.id, -300); setAdjustMenu(false); }}>-5p</button>
+                    <button type="button" onClick={() => { onAdjustTime(task?.id, -60); setAdjustMenu(false); }}>-1p</button>
+                    <button type="button" onClick={() => { onAdjustTime(task?.id, 60); setAdjustMenu(false); }}>+1p</button>
+                    <button type="button" onClick={() => { onAdjustTime(task?.id, 300); setAdjustMenu(false); }}>+5p</button>
+                  </div>
+                )}
+              </div>
+
+              {/* Nút Đặt lại phiên */}
               <IconButton
                 title="Đặt lại phiên này"
-                className="mini-icon-btn"
+                className="mini-icon-btn reset-btn"
                 onClick={() => onReset(task?.id)}
               >
-                <RotateCcw size={15} />
+                <RotateCcw size={14} />
               </IconButton>
 
+              {/* Nút Play / Pause chính nổi bật */}
               <button
                 type="button"
-                className="mini-play-sm no-drag"
+                className={`mini-play-main ${status === 'running' ? 'running' : ''}`}
                 disabled={!task || status === 'completed'}
                 onClick={() => onToggle(task?.id)}
                 aria-label={status === 'running' ? 'Tạm dừng' : 'Bắt đầu'}
+                style={{
+                  '--btn-accent': task?.color || 'var(--accent)',
+                }}
               >
                 {status === 'completed' ? (
                   <Check size={16} />
                 ) : status === 'running' ? (
                   <Pause size={16} fill="currentColor" />
                 ) : (
-                  <Play size={16} fill="currentColor" />
+                  <Play size={16} fill="currentColor" className="ml-0.5" />
                 )}
               </button>
 
-              <IconButton title="Dạng thẻ (Card)" onClick={toggleLayout}>
-                <LayoutPanelLeft size={15} />
+              <span className="mini-bar-divider" />
+
+              {/* Nút chuyển đổi sang Dạng Thẻ */}
+              <IconButton title="Chuyển sang dạng thẻ (Card)" onClick={toggleLayout}>
+                <LayoutPanelLeft size={14} />
               </IconButton>
 
+              {/* Ghim nổi trên cùng */}
               {desktop && (
                 <IconButton
                   title={windowState.pinned ? 'Bỏ ghim nổi' : 'Ghim nổi trên cùng'}
                   className={windowState.pinned ? 'active' : ''}
                   onClick={flow.togglePin}
                 >
-                  {windowState.pinned ? <Pin size={14} /> : <PinOff size={14} />}
+                  {windowState.pinned ? <Pin size={13} /> : <PinOff size={13} />}
                 </IconButton>
               )}
 
+              {/* Phóng to toàn màn hình */}
               <IconButton
                 title="Mở rộng giao diện đầy đủ (Full Mode)"
                 className="expand-btn"
                 onClick={() => flow.setMode('full')}
               >
-                <Maximize2 size={15} />
+                <Maximize2 size={14} />
               </IconButton>
 
+              {/* Đóng cửa sổ */}
               {desktop && (
                 <IconButton
-                  title="Đóng"
+                  title="Đóng ứng dụng"
                   className="close-button"
                   onClick={desktopBridge.close}
                 >
-                  <X size={15} />
+                  <X size={14} />
                 </IconButton>
               )}
             </div>
 
-            {/* Bottom mini progress bar */}
+            {/* Thanh tiến độ viền dưới phát sáng */}
             <div className="mini-progress-bar-bottom drag-region">
-              <span style={{ width: `${percent}%`, background: task?.color }} />
+              <span style={{ width: `${percent}%`, background: task?.color || 'var(--accent)' }} />
             </div>
           </div>
         ) : (
@@ -649,6 +866,29 @@ function MiniTimer({ flow, task, desktop, visualState, onToggle, onReset, onAdju
               </button>
 
               <div className="mini-tools no-drag">
+                {/* Ghibli Music Button in Card mode */}
+                <button
+                  type="button"
+                  className={`mini-ghibli-btn ${ghibliState.isPlaying ? 'playing' : ''}`}
+                  onClick={() => setGhibliMenu(!ghibliMenu)}
+                  title={
+                    ghibliState.isPlaying
+                      ? `Đang phát: ${ghibliState.track.title} - Bấm để xem danh sách / chỉnh âm lượng`
+                      : 'Bật nhạc Ghibli thư giãn'
+                  }
+                >
+                  <Music size={13} />
+                  {ghibliState.isPlaying ? (
+                    <span className="mini-eq-bars">
+                      <i className="b1" />
+                      <i className="b2" />
+                      <i className="b3" />
+                    </span>
+                  ) : (
+                    <span className="mini-ghibli-text">Ghibli</span>
+                  )}
+                </button>
+
                 {desktop && (
                   <IconButton
                     title={windowState.pinned ? 'Bỏ ghim nổi' : 'Ghim nổi trên cùng'}
@@ -833,6 +1073,12 @@ export default function FlowTimer() {
       setMainQuoteFading(false);
     }, 300);
   };
+
+  useEffect(() => {
+    return ambientSound.subscribe(type => {
+      setAmbientSoundType(type);
+    });
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -1320,29 +1566,46 @@ export default function FlowTimer() {
                   {selected ? STATUS[status] : 'KHÔNG GIAN TRỐNG'}
                 </span>
 
-                {/* PiP Button */}
-                <button
-                  type="button"
-                  className={`dock-button no-drag ${pipWindow ? 'active' : ''}`}
-                  onClick={togglePiP}
-                  title={
-                    desktop
-                      ? 'Thu nhỏ thành cửa sổ nổi Desktop'
-                      : pipWindow
-                      ? 'Đóng cửa sổ nổi PiP'
-                      : 'Mở cửa sổ nổi Picture-in-Picture (vẫn hiện khi mở tab mới)'
-                  }
-                >
-                  <PictureInPicture2 size={16} />
-                  <span>
-                    {desktop
-                      ? 'Đồng hồ nổi Desktop'
-                      : pipWindow
-                      ? 'Đóng PiP'
-                      : 'Đồng hồ nổi (PiP)'}
-                  </span>
-                  <ArrowUpRight size={14} />
-                </button>
+                {/* Quick Bar Mode & Dock / PiP Buttons */}
+                <div className="flex items-center gap-2">
+                  {desktop && (
+                    <button
+                      type="button"
+                      className="dock-button no-drag bar-direct-btn"
+                      onClick={() => {
+                        flow.updateSettings({ miniDisplayMode: 'bar' });
+                        flow.setMode('mini-bar');
+                      }}
+                      title="Thu nhỏ tức thì thành dạng thanh nổi mép màn hình (Bar mode)"
+                    >
+                      <LayoutPanelLeft size={15} />
+                      <span>Dạng thanh (Bar)</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    className={`dock-button no-drag ${pipWindow ? 'active' : ''}`}
+                    onClick={togglePiP}
+                    title={
+                      desktop
+                        ? 'Thu nhỏ thành cửa sổ nổi Desktop'
+                        : pipWindow
+                        ? 'Đóng cửa sổ nổi PiP'
+                        : 'Mở cửa sổ nổi Picture-in-Picture (vẫn hiện khi mở tab mới)'
+                    }
+                  >
+                    <PictureInPicture2 size={16} />
+                    <span>
+                      {desktop
+                        ? 'Cửa sổ nổi'
+                        : pipWindow
+                        ? 'Đóng PiP'
+                        : 'Đồng hồ nổi (PiP)'}
+                    </span>
+                    <ArrowUpRight size={14} />
+                  </button>
+                </div>
               </div>
 
               {/* Luminous Frosted Glass Quote Capsule */}
@@ -1543,12 +1806,20 @@ export default function FlowTimer() {
                 type="button"
                 className={`footer-ambient-btn ${ambientSoundType !== 'off' ? 'active' : ''}`}
                 onClick={() => setAmbientModal(true)}
-                title="Chọn âm thanh tập trung (10 loại soundscapes chuẩn Brain.fm, Noisli, Endel, Tide)"
+                title="Chọn âm thanh tập trung hoặc nhạc Ghibli Lofi"
               >
-                {ambientSoundType === 'off' ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                {ambientSoundType.startsWith('ghibli_') ? (
+                  <Music size={14} className="text-amber-300 animate-pulse" />
+                ) : ambientSoundType === 'off' ? (
+                  <VolumeX size={14} />
+                ) : (
+                  <Volume2 size={14} />
+                )}
                 <span>
                   {ambientSoundType === 'off'
-                    ? 'Âm nền: Tắt'
+                    ? 'Âm thanh: Tắt'
+                    : ambientSoundType.startsWith('ghibli_')
+                    ? `🌸 Nhạc: ${SOUND_PRESETS.find(p => p.id === ambientSoundType)?.label || 'Ghibli'}`
                     : `Âm nền: ${SOUND_PRESETS.find(p => p.id === ambientSoundType)?.label || 'Bật'}`}
                 </span>
               </button>

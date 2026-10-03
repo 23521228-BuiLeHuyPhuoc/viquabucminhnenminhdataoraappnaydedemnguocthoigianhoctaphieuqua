@@ -21,14 +21,18 @@ import {
   Trees,
   Coffee,
   Bell,
-  Wind,
+  Music,
+  SkipForward,
+  SkipBack,
 } from 'lucide-react';
 import { getRemainingSeconds, getTaskStatus } from '../lib/timer-engine.js';
 import { formatRemaining, formatDurationShort } from '../lib/time-parser.js';
 import AmbientBackground from './AmbientBackground';
 import { ambientSound, SOUND_PRESETS } from '../lib/ambient-sound.js';
+import { ghibliMusic, GHIBLI_TRACKS } from '../lib/ghibli-music.js';
 
 function getSoundIcon(id, size = 13) {
+  if (id && id.startsWith('ghibli_')) return <Music size={size} />;
   switch (id) {
     case 'brown': return <Headphones size={size} />;
     case 'binaural': return <Activity size={size} />;
@@ -93,6 +97,13 @@ export default function PipFloatingTimer({
   const [soundVolume, setSoundVolume] = useState(ambientSound.getVolume());
   const [quoteIdx, setQuoteIdx] = useState(0);
   const [isFading, setIsFading] = useState(false);
+
+  useEffect(() => {
+    return ambientSound.subscribe(type => {
+      setSoundMode(type);
+      setSoundVolume(ambientSound.getVolume());
+    });
+  }, []);
 
   const currentPreset = SOUND_PRESETS.find(p => p.id === soundMode) || SOUND_PRESETS[0];
 
@@ -324,7 +335,6 @@ export default function PipFloatingTimer({
                   className={`pip-sound-row ${isCurrent ? 'active' : ''}`}
                   onClick={() => {
                     ambientSound.play(preset.id);
-                    setSoundMode(preset.id);
                   }}
                 >
                   <span className={`sound-icon-box ${isCurrent ? 'active' : ''}`}>
@@ -400,15 +410,17 @@ export default function PipFloatingTimer({
             </div>
           ) : (
             <>
+              {/* Task switcher directly in bar */}
               <button
                 type="button"
                 className="pip-task-chip"
-                onClick={() => handleSizeSelect('card')}
+                onClick={() => setTaskPicker(!taskPicker)}
                 disabled={!task}
-                title="Bấm để mở rộng và đổi việc"
+                title="Bấm để đổi việc nhanh"
               >
                 <span className="emoji">{task?.emoji || '✦'}</span>
                 <span className="name">{task?.name || 'Chưa chọn'}</span>
+                <ChevronDown size={11} className="chevron" />
               </button>
 
               <div className="pip-bar-center">
@@ -419,11 +431,12 @@ export default function PipFloatingTimer({
               </div>
 
               <div className="pip-bar-actions">
+                {/* Ghibli Music / Ambient Sound Cycle */}
                 <button
                   type="button"
                   className={`adjust-pill ${soundMode !== 'off' ? 'active' : ''}`}
                   onClick={handleSoundCycle}
-                  title={`Âm thanh: ${currentPreset?.name} (Bấm để đổi âm tiếp theo)`}
+                  title={`Âm thanh: ${currentPreset?.name} (Bấm để chuyển âm Ghibli / thiên nhiên)`}
                 >
                   {getSoundIcon(soundMode, 11)}
                   <span>{currentPreset?.label || 'Âm'}</span>
