@@ -80,6 +80,7 @@ export function resetTask(task) {
 }
 export function editTask(task, changes) {
   if (!task) return task;
+  if (!changes || typeof changes !== 'object') return task;
   const goal = changes.goal ?? task.goal;
   if (!Number.isFinite(goal) || goal < 1 || goal > 86400) throw new Error('Thời lượng không hợp lệ.');
   const updated = { ...task, ...changes, id: task.id, goal };

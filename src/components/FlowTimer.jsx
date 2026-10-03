@@ -555,7 +555,7 @@ function MiniTimer({ flow, task, desktop, visualState, onToggle, onReset, onAdju
   const bar = windowState.mode === 'mini-bar';
   const status = getTaskStatus(task, now);
   const left = getRemainingSeconds(task, now);
-  const percent = task ? Math.min(100, Math.max(0, (1 - left / task.goal) * 100)) : 0;
+  const percent = task && task.goal > 0 ? Math.min(100, Math.max(0, (1 - left / task.goal) * 100)) : 0;
 
   const toggleLayout = () => {
     const value = bar ? 'card' : 'bar';
@@ -1080,12 +1080,15 @@ export default function FlowTimer() {
     });
   }, []);
 
+  const mainQuoteIdxRef = useRef(mainQuoteIdx);
+  mainQuoteIdxRef.current = mainQuoteIdx;
+
   useEffect(() => {
     const timer = setInterval(() => {
-      switchMainQuote((mainQuoteIdx + 1) % FAMOUS_QUOTES.length);
+      switchMainQuote((mainQuoteIdxRef.current + 1) % FAMOUS_QUOTES.length);
     }, 18000);
     return () => clearInterval(timer);
-  }, [mainQuoteIdx]);
+  }, []);
 
   const desktop = typeof window !== 'undefined' && !!window.electronAPI;
   const selected = state?.tasks.find(t => t.id === state.selectedTaskId) || state?.tasks[0];
@@ -1095,7 +1098,7 @@ export default function FlowTimer() {
   const color = shown?.color || '#a8c58a';
   const left = getRemainingSeconds(selected, now);
   const status = getTaskStatus(selected, now);
-  const fraction = selected ? Math.max(0, Math.min(1, left / selected.goal)) : 1;
+  const fraction = selected && selected.goal > 0 ? Math.max(0, Math.min(1, left / selected.goal)) : 1;
   const reduce = state?.reducedMotion;
 
   // Sync visualState with active timer status

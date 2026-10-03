@@ -24,6 +24,7 @@ import {
   Music,
   SkipForward,
   SkipBack,
+  Wind,
 } from 'lucide-react';
 import { getRemainingSeconds, getTaskStatus } from '../lib/timer-engine.js';
 import { formatRemaining, formatDurationShort } from '../lib/time-parser.js';

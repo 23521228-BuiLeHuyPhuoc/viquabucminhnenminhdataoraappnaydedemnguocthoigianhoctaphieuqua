@@ -90,12 +90,14 @@ export default function useFlowTimer() {
   useEffect(() => {
     let active = true;
     mounted.current = true;
-    const api = window.electronAPI;
+    const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
     const receive = value => {
       if (active && value) setWindowState(value);
     };
     const unsubscribe = api?.onWindowState(receive);
-    api?.getWindowState().then(receive).catch(err => active && setError(err.message));
+    if (api) {
+      api.getWindowState().then(receive).catch(err => active && setError(err.message));
+    }
 
     loadPersistedState()
       .then(saved => {
@@ -221,25 +223,30 @@ export default function useFlowTimer() {
         };
       }),
     updateSettings: changes => act(s => ({ ...s, ...changes })),
-    saveTask: values =>
-      act(s => {
-        const exists = s.tasks.some(t => t.id === values.id);
-        const task = exists
-          ? null
-          : {
-              ...values,
-              id: generateSessionId().replace('sess_', 'task_'),
-              left: values.goal,
-              runStart: null,
-              endAt: null,
-              sessionId: null,
-            };
-        return {
-          ...s,
-          tasks: exists ? s.tasks.map(t => (t.id === values.id ? editTask(t, values) : t)) : [...s.tasks, task],
-          selectedTaskId: exists ? s.selectedTaskId : task.id,
-        };
-      }),
+    saveTask: values => {
+      try {
+        act(s => {
+          const exists = s.tasks.some(t => t.id === values.id);
+          const task = exists
+            ? null
+            : {
+                ...values,
+                id: generateSessionId().replace('sess_', 'task_'),
+                left: values.goal,
+                runStart: null,
+                endAt: null,
+                sessionId: null,
+              };
+          return {
+            ...s,
+            tasks: exists ? s.tasks.map(t => (t.id === values.id ? editTask(t, values) : t)) : [...s.tasks, task],
+            selectedTaskId: exists ? s.selectedTaskId : task.id,
+          };
+        });
+      } catch (err) {
+        setError(err.message || 'Không thể lưu công việc.');
+      }
+    },
     deleteTask: id =>
       act(s => {
         const tasks = s.tasks.filter(t => t.id !== id);

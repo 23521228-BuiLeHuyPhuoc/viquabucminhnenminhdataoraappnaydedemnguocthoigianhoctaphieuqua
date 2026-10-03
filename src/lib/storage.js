@@ -18,7 +18,7 @@ export function sanitizeLoadedState(raw) {
     ids.add(id);
     const goal = Number.isFinite(t.goal) && t.goal >= 1 ? clamp(t.goal, 1, 86400) : 1500;
     const left = Number.isFinite(t.left) ? clamp(t.left, 0, goal) : goal;
-    const runStart = Number.isFinite(t.runStart) && t.runStart >= 0 ? t.runStart : null;
+    const runStart = left > 0 && Number.isFinite(t.runStart) && t.runStart >= 0 ? t.runStart : null;
     return { ...t, id, name: text(t.name, 'Công việc'), emoji: text(t.emoji, '◷', 12),
       color: /^#[0-9a-f]{6}$/i.test(t.color) ? t.color : '#a8c58a', goal, left, runStart,
       endAt: runStart !== null ? (Number.isFinite(t.endAt) ? t.endAt : runStart + left * 1000) : null,
@@ -62,8 +62,14 @@ export async function loadPersistedState() {
     if (result?.success === false) throw new Error(result.error || 'Không thể đọc dữ liệu.');
     localData = sanitizeLoadedState(result?.success === true ? result.data : result);
   } else {
-    const value = window.localStorage.getItem(STORAGE_KEY);
-    localData = sanitizeLoadedState(value ? JSON.parse(value) : null);
+    try {
+      const value = window.localStorage.getItem(STORAGE_KEY);
+      localData = sanitizeLoadedState(value ? JSON.parse(value) : null);
+    } catch (parseErr) {
+      // localStorage data is corrupted — recover gracefully with defaults
+      console.warn('[Storage] Dữ liệu localStorage bị hỏng, sử dụng mặc định:', parseErr.message);
+      localData = sanitizeLoadedState(null);
+    }
   }
 
   // Nếu trên trình duyệt, thử kiểm tra bản lưu mới nhất từ MongoDB Atlas
