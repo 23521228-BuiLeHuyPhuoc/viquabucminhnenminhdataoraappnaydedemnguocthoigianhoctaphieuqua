@@ -8,6 +8,8 @@ import {
   resetTask,
   editTask,
   toggleTaskRunning,
+  pauseAllTasks,
+  getRunningTasks,
   checkCompletion,
   reconcileRestoredTasks,
   isTaskRunning,
@@ -231,18 +233,43 @@ test('toggleTaskRunning - task không tồn tại trả về mảng gốc', () =
   assert.equal(result, tasks);
 });
 
-test('toggleTaskRunning - 3+ tasks: chỉ 1 chạy, còn lại pause', () => {
+test('toggleTaskRunning - 3+ tasks: bắt đầu thêm việc không làm dừng việc đang chạy', () => {
   const t0 = 1000;
   const tasks = [
     { id: 'a', goal: 100, left: 100, runStart: t0 },
     { id: 'b', goal: 100, left: 100, runStart: null },
     { id: 'c', goal: 100, left: 100, runStart: null },
   ];
-  // Bắt đầu 'b' → 'a' phải pause
+  // Bắt đầu 'b' → 'a' vẫn chạy, giữ nguyên object
   const result = toggleTaskRunning(tasks, 'b', t0 + 10 * 1000);
-  assert.equal(result.find(t => t.id === 'a').runStart, null, 'A phải pause');
+  assert.equal(result.find(t => t.id === 'a'), tasks[0], 'A giữ nguyên, vẫn running');
   assert.ok(result.find(t => t.id === 'b').runStart, 'B phải running');
   assert.equal(result.find(t => t.id === 'c').runStart, null, 'C phải idle');
+  assert.equal(getRunningTasks(result).length, 2);
+});
+
+test('pauseAllTasks - dừng mọi việc đang chạy và chốt đúng thời gian còn lại', () => {
+  const t0 = 1000;
+  const tasks = [
+    { id: 'a', goal: 100, left: 100, runStart: t0, endAt: t0 + 100 * 1000 },
+    { id: 'b', goal: 50, left: 50, runStart: t0, endAt: t0 + 50 * 1000 },
+    { id: 'c', goal: 70, left: 70, runStart: null },
+  ];
+  const result = pauseAllTasks(tasks, t0 + 20 * 1000);
+  assert.equal(getRunningTasks(result).length, 0);
+  assert.equal(result[0].left, 80);
+  assert.equal(result[1].left, 30);
+  assert.equal(result[2], tasks[2]);
+});
+
+test('pauseAllTasks - không có việc nào chạy trả về mảng gốc', () => {
+  const tasks = [{ id: 'a', goal: 60, left: 60, runStart: null }];
+  assert.equal(pauseAllTasks(tasks, 1000), tasks);
+});
+
+test('getRunningTasks - an toàn với dữ liệu rỗng', () => {
+  assert.deepEqual(getRunningTasks(null), []);
+  assert.deepEqual(getRunningTasks(undefined), []);
 });
 
 // ============================================================
@@ -300,17 +327,20 @@ test('reconcileRestoredTasks - null tasks → mảng rỗng an toàn', () => {
   assert.equal(result.tasks.length, 0);
 });
 
-test('reconcileRestoredTasks - nhiều task running → chỉ 1 tiếp tục, còn lại pause', () => {
+test('reconcileRestoredTasks - nhiều task running → tất cả cùng tiếp tục với thời gian riêng', () => {
   const t0 = 1000;
   const tasks = [
     { id: 'a', goal: 1000, left: 1000, runStart: t0, sessionId: 's1' },
-    { id: 'b', goal: 1000, left: 1000, runStart: t0, sessionId: 's2' },
+    { id: 'b', goal: 1000, left: 500, runStart: t0, sessionId: 's2' },
     { id: 'c', goal: 1000, left: 1000, runStart: t0, sessionId: 's3' },
   ];
   const wakeTime = t0 + 100 * 1000;
   const result = reconcileRestoredTasks(tasks, new Set(), wakeTime);
   const running = result.tasks.filter(isTaskRunning);
-  assert.equal(running.length, 1, 'Chỉ đúng 1 task được tiếp tục chạy');
+  assert.equal(running.length, 3, 'Cả 3 task được tiếp tục chạy song song');
+  assert.equal(result.tasks[0].left, 900);
+  assert.equal(result.tasks[1].left, 400);
+  assert.equal(result.tasks[2].left, 900);
 });
 
 test('reconcileRestoredTasks - tất cả hết giờ trả về expiredSessions đầy đủ', () => {

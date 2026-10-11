@@ -2884,7 +2884,12 @@ kbd {
 /* Reduced motion preference & accessibility */
 :root[data-motion="reduce"] *,
 :root[data-motion="reduce"] *::before,
-:root[data-motion="reduce"] *::after,
+:root[data-motion="reduce"] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

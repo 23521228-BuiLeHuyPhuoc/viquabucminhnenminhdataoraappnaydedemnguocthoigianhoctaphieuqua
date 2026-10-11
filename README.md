@@ -11,10 +11,12 @@ Phiên bản mới được viết lại hoàn toàn độc lập, loại bỏ p
 - **Đồng hồ cát SVG chuyển động sống động**: Cát trên vơi dần, dòng cát chảy mềm mại, cát dưới dâng lên theo tỷ lệ thời gian thực. Bấm vào đồng hồ cát có thể chuyển đổi nhanh sang dạng **Vòng tiến độ thanh lịch (Progress Ring)**.
 - **Màu sắc phản hồi có chủ đích**: Mỗi công việc có một màu accent riêng. Nền, viền phát sáng và hiệu ứng nút tự động chuyển biến nhịp nhàng theo công việc đang tập trung.
 - **Đếm ngược thời gian thực chuẩn xác**: Tính toán bằng `Math.max(0, endAt - now)`, không phụ thuộc vào `setInterval`. Khi máy tính chuyển tab hoặc ngủ (sleep), timer không bị sai lệch; khi mở lại sẽ cập nhật chính xác thời gian đã trôi.
-- **Chỉ 1 công việc chạy tại một thời điểm**: Xem môn B không làm dừng môn A; bắt đầu môn B sẽ tự động chốt và pause môn A, sau đó bắt đầu môn B.
+- **Đếm ngược nhiều công việc song song**: Mỗi công việc có hạn chót (`endAt`) riêng nên có thể chạy 2, 3 hay nhiều việc cùng lúc. Bắt đầu môn B **không** làm dừng môn A; tạm dừng một việc không ảnh hưởng việc khác. Có nút **Dừng tất cả**, và khi mở lại ứng dụng mọi việc đang chạy đều được khôi phục đúng thời gian còn lại.
 - **Đồng hồ nổi Desktop (Floating Mini Window)**:
   - Ghim luôn trên cùng (*Always on top*) trên desktop Windows.
   - Hỗ trợ 2 kiểu giao diện: **Thẻ gọn (Compact Card)** và **Thanh ngang (Slim Bar)**.
+  - **Thanh nổi đa luồng**: hàng chính hiển thị việc đang tập trung, bên dưới là các **làn** cho từng việc đang chạy song song (giờ riêng, thanh tiến độ, nút chạy/dừng riêng). Bấm tên làn để đưa lên hàng chính; huy hiệu `+N` để thu gọn/mở rộng; cửa sổ tự co giãn theo số làn.
+  - Hiệu ứng: đường cực quang pha màu các việc đang chạy, viền gradient xoay khi có từ 2 việc chạy, ánh sáng lướt trên thanh tiến độ, làn trượt vào/ra, chúc mừng khi một việc hoàn thành.
   - Vùng kéo thả rõ ràng, không bị cản trở khi bấm các nút tương tác.
   - **Ghim nhanh vào 4 góc màn hình**: Tự động tính toán theo vùng làm việc khả dụng (`workArea`), không che thanh Taskbar Windows.
   - Tự động phát hiện và đưa cửa sổ về vùng hiển thị nếu người dùng tháo màn hình phụ hoặc đổi độ phân giải.
@@ -58,7 +60,7 @@ npm run electron:dev
 ```bash
 npm test
 ```
-Kiểm thử tự động toàn bộ 16 ca kiểm thử cho Timer Engine, Time Parser và Storage Adapter.
+Kiểm thử tự động Timer Engine (gồm nhiều việc chạy song song), Multi Timer (các làn của thanh nổi), Time Parser và Storage Adapter.
 
 ### Đóng gói ứng dụng Desktop Windows (.exe Installer)
 ```bash
@@ -70,7 +72,7 @@ File cài đặt sẽ được tạo trong thư mục `dist-electron/`.
 
 ## 4. Phím tắt trong ứng dụng
 
-- `Space`: Bắt đầu / Tạm dừng công việc đang chọn hoặc đang chạy.
+- `Space`: Bắt đầu / Tạm dừng công việc đang chọn (các việc khác đang chạy song song không bị ảnh hưởng).
 - `M`: Bật / tắt nhanh chế độ đồng hồ nổi mini.
 - `Escape`: Đóng nhanh các hộp thoại modal đang mở (Chỉnh giờ, Thêm môn, Cài đặt).
 

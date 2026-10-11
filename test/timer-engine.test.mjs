@@ -71,7 +71,7 @@ test('Timer Engine - Đang chạy A, chọn xem B: A vẫn tiếp tục chạy �
   assert.equal(getRemainingSeconds(tasks[1], t1), 60);
 });
 
-test('Timer Engine - Bắt đầu B trong lúc A đang chạy: A pause, chỉ B chạy', () => {
+test('Timer Engine - Bắt đầu B trong lúc A đang chạy: A và B cùng đếm ngược song song', () => {
   const t0 = 1000000;
   let tasks = [
     { id: 'task-a', name: 'Task A', goal: 100, left: 100, runStart: null },
@@ -89,14 +89,59 @@ test('Timer Engine - Bắt đầu B trong lúc A đang chạy: A pause, chỉ B 
   const taskA = tasks.find(t => t.id === 'task-a');
   const taskB = tasks.find(t => t.id === 'task-b');
 
-  // Task A đã được chốt và pause ở 75s còn lại
-  assert.equal(taskA.runStart, null);
-  assert.equal(taskA.left, 75);
-  assert.equal(getTaskStatus(taskA, t1), TIMER_STATUS.PAUSED);
+  // Task A KHÔNG bị pause, vẫn tiếp tục chạy với deadline cũ
+  assert.equal(taskA.runStart, t0);
+  assert.equal(getTaskStatus(taskA, t1), TIMER_STATUS.RUNNING);
+  assert.equal(getRemainingSeconds(taskA, t1), 75);
 
-  // Chỉ Task B đang chạy
+  // Task B cũng đang chạy
   assert.equal(taskB.runStart, t1);
   assert.equal(getTaskStatus(taskB, t1), TIMER_STATUS.RUNNING);
+
+  // 30 giây sau: cả hai đều bị trừ thời gian độc lập
+  const t2 = t1 + 30 * 1000;
+  assert.equal(getRemainingSeconds(taskA, t2), 45);
+  assert.equal(getRemainingSeconds(taskB, t2), 50);
+});
+
+test('Timer Engine - Tạm dừng A khi A và B cùng chạy: chỉ A dừng, B vẫn chạy', () => {
+  const t0 = 1000000;
+  let tasks = [
+    { id: 'task-a', name: 'Task A', goal: 100, left: 100, runStart: null },
+    { id: 'task-b', name: 'Task B', goal: 80, left: 80, runStart: null },
+  ];
+  tasks = toggleTaskRunning(tasks, 'task-a', t0);
+  tasks = toggleTaskRunning(tasks, 'task-b', t0);
+
+  const t1 = t0 + 20 * 1000;
+  tasks = toggleTaskRunning(tasks, 'task-a', t1);
+
+  const taskA = tasks.find(t => t.id === 'task-a');
+  const taskB = tasks.find(t => t.id === 'task-b');
+  assert.equal(taskA.runStart, null);
+  assert.equal(taskA.left, 80);
+  assert.equal(getTaskStatus(taskA, t1), TIMER_STATUS.PAUSED);
+  assert.equal(getTaskStatus(taskB, t1), TIMER_STATUS.RUNNING);
+  assert.equal(getRemainingSeconds(taskB, t1 + 10 * 1000), 50);
+});
+
+test('Timer Engine - Hai việc chạy song song hết giờ vào hai thời điểm khác nhau', () => {
+  const t0 = 1000000;
+  let tasks = [
+    { id: 'short', name: 'Short', goal: 30, left: 30, runStart: null },
+    { id: 'long', name: 'Long', goal: 90, left: 90, runStart: null },
+  ];
+  tasks = toggleTaskRunning(tasks, 'short', t0);
+  tasks = toggleTaskRunning(tasks, 'long', t0);
+
+  const handled = new Set();
+  const first = checkCompletion(tasks, handled, t0 + 31 * 1000);
+  assert.deepEqual(first.completionEvents.map(e => e.taskId), ['short']);
+  first.completionEvents.forEach(e => handled.add(e.sessionId));
+  assert.equal(getTaskStatus(first.updatedTasks[1], t0 + 31 * 1000), TIMER_STATUS.RUNNING);
+
+  const second = checkCompletion(first.updatedTasks, handled, t0 + 91 * 1000);
+  assert.deepEqual(second.completionEvents.map(e => e.taskId), ['long']);
 });
 
 test('Timer Engine - Reset đưa về mục tiêu và dừng timer', () => {

@@ -39,7 +39,9 @@ import {
   X
 } from 'lucide-react';
 import useFlowTimer from '../hooks/useFlowTimer';
-import { getRemainingSeconds, getTaskStatus, isTaskRunning, TIMER_STATUS, PALETTE } from '../lib/timer-engine.js';
+import useTaskLanes, { useCelebration, useFocusRunningOnMount } from '../hooks/useTaskLanes';
+import { getRemainingSeconds, getTaskStatus, isTaskRunning, getRunningTasks, TIMER_STATUS, PALETTE } from '../lib/timer-engine.js';
+import { lanesBlockHeight } from '../lib/multi-timer.js';
 import { formatRemaining, formatDurationShort, parseDuration } from '../lib/time-parser.js';
 import { desktopBridge } from '../lib/desktop-bridge.js';
 import { playCompletionSound } from '../lib/sound.js';
@@ -47,6 +49,12 @@ import { ambientSound, SOUND_PRESETS } from '../lib/ambient-sound.js';
 import { ghibliMusic, GHIBLI_TRACKS, PLAYLISTS, LOOP_MODE } from '../lib/ghibli-music.js';
 import AmbientBackground from './AmbientBackground';
 import PipFloatingTimer, { FAMOUS_QUOTES } from './PipFloatingTimer';
+import { ParallelAurora, TaskLanes, LaneChips, TaskPickerRow } from './TaskLanes';
+import SlimBarRow from './SlimBarRow';
+
+// Chiều cao hàng chính của thanh nổi (khớp SIZES['mini-bar'] trong electron/main.js).
+const BAR_HEIGHT = 76;
+const BAR_MENU_HEIGHT = 420;
 
 const STATUS = {
   idle: 'Sẵn sàng bắt đầu',
@@ -665,20 +673,35 @@ function MiniTimer({ flow, task, desktop, visualState, onToggle, onReset, onAdju
     return ghibliMusic.subscribe(info => setGhibliState(info));
   }, []);
 
+  const [lanesCollapsed, setLanesCollapsed] = useState(false);
+
+  useFocusRunningOnMount(flow, task);
+  const lanes = useTaskLanes(state.tasks, task?.id, now);
+  const celebrating = useCelebration(flow.celebration);
+
   const bar = windowState.mode === 'mini-bar';
   const status = getTaskStatus(task, now);
   const left = getRemainingSeconds(task, now);
   const percent = task && task.goal > 0 ? Math.min(100, Math.max(0, (1 - left / task.goal) * 100)) : 0;
   const fraction = task && task.goal > 0 ? Math.max(0, Math.min(1, left / task.goal)) : 1;
+  const runningTasks = getRunningTasks(state.tasks);
 
-  const anyMenu = taskPicker || ghibliMenu || adjustMenu || quoteMenu || confirmReset;
+  const anyMenu = taskPicker || ghibliMenu || adjustMenu || quoteMenu;
+  const barHeight = BAR_HEIGHT + lanesBlockHeight(lanes.entries.length, { collapsed: lanesCollapsed });
 
-  // Auto-expand/collapse Electron window height in Bar mode when menus open/close
+  // Tự co giãn chiều cao cửa sổ thanh nổi theo số làn công việc song song và khi mở menu
   useEffect(() => {
-    if (desktop && bar) {
-      desktopBridge.setHeight(anyMenu ? 420 : 76);
-    }
-  }, [anyMenu, desktop, bar]);
+    if (!desktop || !bar) return;
+    const height = anyMenu ? Math.max(BAR_MENU_HEIGHT, barHeight) : barHeight;
+    Promise.resolve(desktopBridge.setHeight(height)).catch(() => {});
+  }, [anyMenu, desktop, bar, barHeight]);
+
+  const openTaskPicker = () => {
+    setTaskPicker(open => !open);
+    setGhibliMenu(false);
+    setAdjustMenu(false);
+    setQuoteMenu(false);
+  };
 
   const toggleLayout = () => {
     const value = bar ? 'card' : 'bar';
@@ -724,40 +747,61 @@ function MiniTimer({ flow, task, desktop, visualState, onToggle, onReset, onAdju
     <main className={`mini-host ${desktop ? 'native' : 'web-preview'}`}>
       {!desktop && <div className="preview-caption no-drag">Xem trước Mini Widget · Chế độ Web</div>}
 
-      <section className={`mini-window ${bar ? 'bar' : 'card'}`}>
+      <section
+        className={`mini-window ${bar ? 'bar bar-shell' : 'card'} ${anyMenu ? 'menu-open' : ''} ${celebrating ? 'celebrate' : ''} ${runningTasks.length > 1 ? 'multi-running' : ''}`}
+        style={
+          runningTasks.length > 1
+            ? { '--multi-stops': [...runningTasks, runningTasks[0]].map(t => t.color).join(', ') }
+            : undefined
+        }
+      >
         <AmbientBackground visualState={visualState} isMini={true} />
+        {!bar && <ParallelAurora tasks={runningTasks} />}
 
-        {/* Task Picker Dropdown Popover */}
+        {/* Task Picker: đổi việc chính + chạy / dừng song song từng việc */}
         {taskPicker && (
           <div className="mini-task-menu no-drag" role="menu">
             <div className="mini-task-menu-header">
-              <span>Đổi công việc học tập ({state.tasks.length})</span>
-              <IconButton title="Đóng danh sách" onClick={() => setTaskPicker(false)}>
-                <X size={14} />
-              </IconButton>
-            </div>
-            <div className="mini-task-menu-list">
-              {state.tasks.map(t => {
-                const isSelected = t.id === task?.id;
-                const rem = getRemainingSeconds(t, now);
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    className={`mini-task-item ${isSelected ? 'active' : ''}`}
-                    onClick={() => {
-                      flow.select(t.id);
-                      setTaskPicker(false);
-                    }}
-                  >
-                    <span className="item-color-dot" style={{ background: t.color }} />
-                    <span className="item-emoji">{t.emoji}</span>
-                    <strong className="item-name">{t.name}</strong>
-                    <span className="item-time">{formatDurationShort(rem)}</span>
+              <span>
+                {state.tasks.length} công việc
+                {runningTasks.length > 0 && <em className="menu-running-count"> · {runningTasks.length} đang chạy</em>}
+              </span>
+              <div className="flex items-center gap-1">
+                {runningTasks.length > 0 && (
+                  <button type="button" className="pause-all-btn" onClick={flow.pauseAll} title="Tạm dừng mọi việc đang chạy">
+                    <Pause size={11} fill="currentColor" />Dừng tất cả
                   </button>
-                );
-              })}
+                )}
+                <IconButton title="Đóng danh sách" onClick={() => setTaskPicker(false)}>
+                  <X size={14} />
+                </IconButton>
+              </div>
             </div>
+            <p className="mini-task-menu-hint">Bấm tên để đưa lên thanh chính · bấm ▶ để chạy song song</p>
+            <div className="mini-task-menu-list">
+              {state.tasks.map(t => (
+                <TaskPickerRow
+                  key={t.id}
+                  task={t}
+                  now={now}
+                  active={t.id === task?.id}
+                  rowClassName="mini-task-item"
+                  onSelect={id => {
+                    flow.select(id);
+                    setTaskPicker(false);
+                  }}
+                  onToggle={flow.toggle}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {celebrating && (
+          <div className="mini-celebrate-ribbon no-drag" role="status" key={celebrating.id}>
+            <span className="ribbon-spark">✦</span>
+            Hoàn thành: <strong>{celebrating.names}</strong>
+            <span className="ribbon-spark">✦</span>
           </div>
         )}
 
@@ -1027,267 +1071,101 @@ function MiniTimer({ flow, task, desktop, visualState, onToggle, onReset, onAdju
 
         {bar ? (
           /* ======================================================== */
-          /* SLIM BAR LAYOUT: TỐI ƯU TOÀN DIỆN VỚI ĐỦ CÁC TÍNH NĂNG     */
+          /* SLIM BAR: HÀNG CHÍNH + CÁC LÀN CÔNG VIỆC SONG SONG         */
           /* ======================================================== */
-          <div className="mini-bar-content drag-region">
-            {confirmReset ? (
-              <div className="mini-bar-confirm no-drag">
-                <span className="confirm-text">Đặt lại “{task?.name}”?</span>
-                <div className="confirm-actions">
-                  <button
-                    type="button"
-                    className="confirm-btn-pill cancel"
-                    onClick={() => setConfirmReset(false)}
-                  >
-                    Hủy
-                  </button>
-                  <button
-                    type="button"
-                    className="confirm-btn-pill danger"
-                    onClick={() => {
-                      setConfirmReset(false);
-                      if (task) onReset(task.id);
-                    }}
-                  >
-                    Đặt lại
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <>
-                {/* 1. Trái: Task button & Status pulse */}
-                <div className="mini-bar-left no-drag">
-                  <button
-                    type="button"
-                    className="mini-bar-task-btn"
-                    onClick={() => {
-                      setTaskPicker(!taskPicker);
-                      setGhibliMenu(false);
-                      setAdjustMenu(false);
-                      setQuoteMenu(false);
-                    }}
-                    title="Bấm để đổi nhanh công việc"
-                  >
-                    <span
-                      className={`status-pulse-dot ${status}`}
-                      style={{ '--dot-color': task?.color || 'var(--accent)' }}
-                    />
-                    <span className="task-emoji-sm">{task?.emoji || '✦'}</span>
-                    <span className="mini-bar-task" title={task?.name}>
-                      {task?.name || 'Chưa chọn việc'}
-                    </span>
-                    <ChevronDown size={12} className="chevron" />
-                  </button>
-                </div>
-
-                {/* 2. Giữa: Visual Orb + Chữ số to rõ + % tiến độ */}
-                <div className="flex items-center gap-2 no-drag">
-                  {/* Interactive Visual Orb (Hourglass / Ring) */}
-                  <button
-                    type="button"
-                    className={`mini-visual-orb ${status === 'running' ? 'running' : ''}`}
-                    onClick={toggleVisualMode}
-                    title={`Hiệu ứng: ${state.visualMode === 'hourglass' ? 'Đồng hồ cát' : 'Vòng thời gian'} (Bấm để chuyển đổi)`}
-                  >
-                    {state.visualMode === 'hourglass' ? (
-                      <svg className="mini-hourglass-svg-sm" viewBox="0 0 100 110" aria-hidden="true">
-                        <defs>
-                          <clipPath id="mini-bar-hg-clip">
-                            <path d="M22 12H78V25C78 39 58 45 53 54C58 65 78 70 78 85V98H22V85C22 70 42 65 47 54C42 45 22 39 22 25Z" />
-                          </clipPath>
-                        </defs>
-                        <g clipPath="url(#mini-bar-hg-clip)">
-                          <rect x="15" y={54 - fraction * 42} width="70" height={fraction * 42} fill="var(--accent)" opacity="0.8" />
-                          <rect x="15" y={98 - (1 - fraction) * 42} width="70" height={(1 - fraction) * 42} fill="var(--accent)" />
-                          {status === 'running' && (
-                            <path d={`M50 54V${98 - (1 - fraction) * 42}`} stroke="var(--accent)" strokeWidth="3" strokeDasharray="2 3" />
-                          )}
-                        </g>
-                        <path d="M22 12H78V25C78 39 58 45 53 54C58 65 78 70 78 85V98H22V85C22 70 42 65 47 54C42 45 22 39 22 25Z" fill="none" stroke="currentColor" strokeOpacity="0.4" strokeWidth="2.5" />
-                        <path d="M17 9H83M17 101H83" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
-                      </svg>
-                    ) : (
-                      <svg className="mini-ring-svg-sm" viewBox="0 0 100 100">
-                        <circle cx="50" cy="50" r="40" className="ring-track" />
-                        <circle
-                          cx="50"
-                          cy="50"
-                          r="40"
-                          className="ring-progress"
-                          stroke="var(--accent)"
-                          strokeDasharray={2 * Math.PI * 40}
-                          strokeDashoffset={2 * Math.PI * 40 * (1 - fraction)}
-                          transform="rotate(-90 50 50)"
-                        />
-                      </svg>
-                    )}
-                  </button>
-
-                  <div
-                    className={`mini-bar-time drag-region ${status === 'running' ? 'running' : ''}`}
-                    title={STATUS[status]}
-                  >
-                    {formatRemaining(left)}
-                  </div>
-
-                  <span className={`mini-percent-badge ${status === 'running' ? 'running' : ''}`}>
-                    {Math.round(percent)}%
-                  </span>
-                </div>
-
-                {/* 3. Phải: Ghibli Music, Adjust, Quote, Reset, Play/Pause, Tools */}
-                <div className="mini-bar-actions no-drag">
-                  {/* Nút Nghe nhạc Ghibli & Âm thanh */}
-                  <button
-                    type="button"
-                    className={`mini-ghibli-btn ${ghibliState.isPlaying ? 'playing' : ''}`}
-                    onClick={() => {
-                      setGhibliMenu(!ghibliMenu);
-                      setTaskPicker(false);
-                      setAdjustMenu(false);
-                      setQuoteMenu(false);
-                    }}
-                    title={
-                      ghibliState.isPlaying
-                        ? `Đang phát: ${ghibliState.currentTrack.title} — Bấm để chọn danh sách / trộn / lặp`
-                        : 'Bật nhạc Ghibli Lofi & Âm tập trung'
-                    }
-                  >
-                    <Music size={13} />
-                    {ghibliState.isPlaying ? (
-                      <span className="mini-eq-bars">
-                        <i className="b1" />
-                        <i className="b2" />
-                        <i className="b3" />
-                      </span>
-                    ) : (
-                      <span className="mini-ghibli-text">Ghibli</span>
-                    )}
-                  </button>
-
-                  {/* Nút Chỉnh nhanh thời gian */}
-                  <div className="mini-adjust-wrap">
-                    <button
-                      type="button"
-                      className="adjust-pill-bar"
-                      onClick={() => onAdjustTime(task?.id, 300)}
-                      onContextMenu={e => {
-                        e.preventDefault();
-                        setAdjustMenu(!adjustMenu);
-                        setGhibliMenu(false);
-                        setTaskPicker(false);
-                        setQuoteMenu(false);
-                      }}
-                      title="Cộng 5 phút (Chuột phải hoặc bấm mũi tên để mở menu chỉnh giờ)"
-                    >
-                      +5p
-                    </button>
-                    <button
-                      type="button"
-                      className="pip-icon-btn"
-                      style={{ width: 16, height: 26, padding: 0 }}
-                      onClick={() => {
-                        setAdjustMenu(!adjustMenu);
-                        setGhibliMenu(false);
-                        setTaskPicker(false);
-                        setQuoteMenu(false);
-                      }}
-                      title="Mở menu chỉnh giờ (-5p, -1p, +1p, +5p, sửa phút)"
-                    >
-                      <ChevronDown size={11} />
-                    </button>
-                  </div>
-
-                  {/* Nút Danh ngôn truyền cảm hứng */}
-                  <button
-                    type="button"
-                    className={`mini-quote-btn ${quoteMenu ? 'active' : ''}`}
-                    onClick={() => {
-                      setQuoteMenu(!quoteMenu);
-                      setGhibliMenu(false);
-                      setTaskPicker(false);
-                      setAdjustMenu(false);
-                    }}
-                    title={`Danh ngôn: “${FAMOUS_QUOTES[quoteIdx].text}” — ${FAMOUS_QUOTES[quoteIdx].author}`}
-                  >
-                    <Sparkles size={13} />
-                  </button>
-
-                  {/* Nút Đặt lại phiên (An toàn) */}
-                  <IconButton
-                    title="Đặt lại phiên này"
-                    className="mini-icon-btn reset-btn"
-                    onClick={handleResetClick}
-                  >
-                    <RotateCcw size={14} />
-                  </IconButton>
-
-                  {/* Nút Play / Pause chính nổi bật */}
-                  <button
-                    type="button"
-                    className={`mini-play-main ${status === 'running' ? 'running' : ''}`}
-                    disabled={!task || status === 'completed'}
-                    onClick={() => onToggle(task?.id)}
-                    aria-label={status === 'running' ? 'Tạm dừng' : 'Bắt đầu'}
-                    style={{
-                      '--btn-accent': task?.color || 'var(--accent)',
-                    }}
-                  >
-                    {status === 'completed' ? (
-                      <Check size={16} />
-                    ) : status === 'running' ? (
-                      <Pause size={16} fill="currentColor" />
-                    ) : (
-                      <Play size={16} fill="currentColor" className="ml-0.5" />
-                    )}
-                  </button>
-
-                  <span className="mini-bar-divider" />
-
-                  {/* Nút chuyển đổi sang Dạng Thẻ */}
+          <>
+            <SlimBarRow
+              className="drag-region"
+              clipId="mini-bar-hg-clip"
+              task={task}
+              status={status}
+              left={left}
+              percent={percent}
+              fraction={fraction}
+              visualMode={state.visualMode}
+              onCycleVisual={toggleVisualMode}
+              lanes={lanes}
+              lanesCollapsed={lanesCollapsed}
+              onToggleLanes={() => setLanesCollapsed(value => !value)}
+              now={now}
+              onOpenPicker={openTaskPicker}
+              ghibliState={ghibliState}
+              onMusic={() => {
+                setGhibliMenu(!ghibliMenu);
+                setTaskPicker(false);
+                setAdjustMenu(false);
+                setQuoteMenu(false);
+              }}
+              onPlus5={() => onAdjustTime(task?.id, 300)}
+              onAdjustMenu={() => {
+                setAdjustMenu(!adjustMenu);
+                setGhibliMenu(false);
+                setTaskPicker(false);
+                setQuoteMenu(false);
+              }}
+              quoteActive={quoteMenu}
+              quoteTitle={`Danh ngôn: “${FAMOUS_QUOTES[quoteIdx].text}” — ${FAMOUS_QUOTES[quoteIdx].author}`}
+              onQuote={() => {
+                setQuoteMenu(!quoteMenu);
+                setGhibliMenu(false);
+                setTaskPicker(false);
+                setAdjustMenu(false);
+              }}
+              onReset={handleResetClick}
+              onToggle={() => onToggle(task?.id)}
+              confirmReset={confirmReset}
+              onCancelReset={() => setConfirmReset(false)}
+              onConfirmReset={() => {
+                setConfirmReset(false);
+                if (task) onReset(task.id);
+              }}
+              windowControls={
+                <>
                   <IconButton title="Chuyển sang dạng thẻ (Card)" onClick={toggleLayout}>
-                    <LayoutPanelLeft size={14} />
+                    <LayoutPanelLeft size={11} />
                   </IconButton>
-
-                  {/* Ghim nổi trên cùng */}
                   {desktop && (
                     <IconButton
                       title={windowState.pinned ? 'Bỏ ghim nổi' : 'Ghim nổi trên cùng'}
                       className={windowState.pinned ? 'active' : ''}
                       onClick={flow.togglePin}
                     >
-                      {windowState.pinned ? <Pin size={13} /> : <PinOff size={13} />}
+                      {windowState.pinned ? <Pin size={11} /> : <PinOff size={11} />}
                     </IconButton>
                   )}
-
-                  {/* Phóng to toàn màn hình */}
                   <IconButton
                     title="Mở rộng giao diện đầy đủ (Full Mode)"
                     className="expand-btn"
                     onClick={() => flow.setMode('full')}
                   >
-                    <Maximize2 size={14} />
+                    <Maximize2 size={11} />
                   </IconButton>
-
-                  {/* Đóng cửa sổ */}
                   {desktop && (
-                    <IconButton
-                      title="Đóng ứng dụng"
-                      className="close-button"
-                      onClick={desktopBridge.close}
-                    >
-                      <X size={14} />
+                    <IconButton title="Đóng ứng dụng" className="close-button" onClick={desktopBridge.close}>
+                      <X size={12} />
                     </IconButton>
                   )}
-                </div>
-              </>
-            )}
+                </>
+              }
+            >
+              <ParallelAurora tasks={runningTasks} />
+              {/* Thanh tiến độ viền dưới phát sáng */}
+              <div className={`mini-progress-bar-bottom drag-region ${status}`}>
+                <span style={{ width: `${percent}%`, background: task?.color || 'var(--accent)' }} />
+              </div>
+            </SlimBarRow>
 
-            {/* Thanh tiến độ viền dưới phát sáng */}
-            <div className="mini-progress-bar-bottom drag-region">
-              <span style={{ width: `${percent}%`, background: task?.color || 'var(--accent)' }} />
-            </div>
-          </div>
+            {!lanesCollapsed && (
+              <TaskLanes
+                lanes={lanes}
+                now={now}
+                onToggle={flow.toggle}
+                onFocus={flow.select}
+                onDismiss={lanes.dismiss}
+                onMore={openTaskPicker}
+              />
+            )}
+          </>
         ) : (
           /* Mini Card Layout */
           <>
@@ -1295,11 +1173,12 @@ function MiniTimer({ flow, task, desktop, visualState, onToggle, onReset, onAdju
               <button
                 type="button"
                 className="mini-task-btn no-drag"
-                onClick={() => setTaskPicker(!taskPicker)}
-                title="Bấm để đổi công việc"
+                onClick={openTaskPicker}
+                title="Bấm để đổi việc chính hoặc chạy thêm việc song song"
               >
                 <span className="task-emoji">{task?.emoji || '✦'}</span>
                 <span className="task-title" title={task?.name}>{task?.name || 'Chưa chọn việc'}</span>
+                {runningTasks.length > 1 && <span className="card-running-count">{runningTasks.length}</span>}
                 <ChevronDown size={13} className="chevron" />
               </button>
 
@@ -1307,23 +1186,21 @@ function MiniTimer({ flow, task, desktop, visualState, onToggle, onReset, onAdju
                 {/* Ghibli Music Button in Card mode */}
                 <button
                   type="button"
-                  className={`mini-ghibli-btn ${ghibliState.isPlaying ? 'playing' : ''}`}
+                  className={`mini-ghibli-btn compact ${ghibliState.isPlaying ? 'playing' : ''}`}
                   onClick={() => setGhibliMenu(!ghibliMenu)}
                   title={
                     ghibliState.isPlaying
-                      ? `Đang phát: ${ghibliState.track.title} - Bấm để xem danh sách / chỉnh âm lượng`
+                      ? `Đang phát: ${ghibliState.currentTrack.title} - Bấm để xem danh sách / chỉnh âm lượng`
                       : 'Bật nhạc Ghibli thư giãn'
                   }
                 >
                   <Music size={13} />
-                  {ghibliState.isPlaying ? (
+                  {ghibliState.isPlaying && (
                     <span className="mini-eq-bars">
                       <i className="b1" />
                       <i className="b2" />
                       <i className="b3" />
                     </span>
-                  ) : (
-                    <span className="mini-ghibli-text">Ghibli</span>
                   )}
                 </button>
 
@@ -1439,10 +1316,14 @@ function MiniTimer({ flow, task, desktop, visualState, onToggle, onReset, onAdju
               <span style={{ width: `${percent}%`, background: task?.color }} />
             </div>
 
-            <footer className="mini-footer drag-region">
-              <span>{Math.round(percent)}% hoàn thành</span>
-              <span className="brand-tag">flow<span className="brand-dot">.</span></span>
-            </footer>
+            {lanes.entries.length > 0 ? (
+              <LaneChips lanes={lanes} now={now} onToggle={flow.toggle} onFocus={flow.select} />
+            ) : (
+              <footer className="mini-footer drag-region">
+                <span>{Math.round(percent)}% hoàn thành</span>
+                <span className="brand-tag">flow<span className="brand-dot">.</span></span>
+              </footer>
+            )}
           </>
         )}
 
@@ -1530,10 +1411,10 @@ export default function FlowTimer() {
 
   const desktop = typeof window !== 'undefined' && !!window.electronAPI;
   const selected = state?.tasks.find(t => t.id === state.selectedTaskId) || state?.tasks[0];
-  const running = state?.tasks.find(isTaskRunning);
+  const runningTasks = getRunningTasks(state?.tasks);
+  const otherRunning = runningTasks.filter(t => t.id !== selected?.id);
   const isMini = flow.windowState.mode !== 'full';
-  const shown = isMini ? running || selected : selected;
-  const color = shown?.color || '#a8c58a';
+  const color = selected?.color || '#a8c58a';
   const left = getRemainingSeconds(selected, now);
   const status = getTaskStatus(selected, now);
   const fraction = selected && selected.goal > 0 ? Math.max(0, Math.min(1, left / selected.goal)) : 1;
@@ -1782,8 +1663,7 @@ export default function FlowTimer() {
 
       if (event.code === 'Space' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
         event.preventDefault();
-        const targetTask = isMini ? running || selected : selected;
-        if (targetTask) handleToggle(targetTask.id);
+        if (selected) handleToggle(selected.id);
         return;
       }
 
@@ -1812,7 +1692,7 @@ export default function FlowTimer() {
       window.removeEventListener('keydown', handleKeyDown);
       cleanupPiP?.();
     };
-  }, [state, isMini, selected, running, pipWindow]);
+  }, [state, isMini, selected, pipWindow]);
 
   useEffect(() => {
     if (!flow.notice) return;
@@ -1855,7 +1735,7 @@ export default function FlowTimer() {
         createPortal(
           <PipFloatingTimer
             flow={flow}
-            task={shown}
+            task={selected}
             visualState={visualState}
             onToggle={handleToggle}
             onReset={handleReset}
@@ -1876,7 +1756,7 @@ export default function FlowTimer() {
       {isMini ? (
         <MiniTimer
           flow={flow}
-          task={shown}
+          task={selected}
           desktop={desktop}
           visualState={visualState}
           onToggle={handleToggle}
@@ -1924,7 +1804,15 @@ export default function FlowTimer() {
             <aside className="task-sidebar">
               <div className="sidebar-label">
                 <span>KẾ HOẠCH CỦA BẠN</span>
-                <span className="task-count">{state.tasks.length}</span>
+                <span className="flex items-center gap-1.5">
+                  {runningTasks.length > 0 && (
+                    <span className="running-count-pill" title="Số việc đang đếm ngược song song">
+                      <i className="status-dot running" />
+                      {runningTasks.length} đang chạy
+                    </span>
+                  )}
+                  <span className="task-count">{state.tasks.length}</span>
+                </span>
               </div>
               <h2>Từng việc một<span>.</span></h2>
               <p className="sidebar-intro">Dành thời gian cho điều quan trọng.</p>
@@ -1938,7 +1826,7 @@ export default function FlowTimer() {
 
                   return (
                     <div
-                      className={`task-card ${isSelected ? 'selected' : ''}`}
+                      className={`task-card ${isSelected ? 'selected' : ''} ${taskStatus}`}
                       key={task.id}
                       style={{ '--task-color': task.color }}
                     >
@@ -1952,7 +1840,10 @@ export default function FlowTimer() {
                           <strong title={task.name}>{task.name}</strong>
                           <span>
                             {taskStatus === 'running' ? (
-                              <><i className="status-dot running" />Đang chạy</>
+                              <>
+                                <i className="status-dot running" />Đang chạy ·{' '}
+                                <b className="task-live-time">{formatRemaining(remaining)}</b>
+                              </>
                             ) : taskStatus === 'completed' ? (
                               <><Check size={12} />Hoàn thành</>
                             ) : (
@@ -1969,6 +1860,26 @@ export default function FlowTimer() {
                         <div className="task-track">
                           <span style={{ width: `${progress}%`, background: task.color }} />
                         </div>
+                        <IconButton
+                          title={
+                            taskStatus === 'running'
+                              ? `Tạm dừng ${task.name}`
+                              : taskStatus === 'completed'
+                              ? `${task.name} đã hoàn thành`
+                              : `Chạy ${task.name} (song song với việc khác)`
+                          }
+                          className={`task-quick-toggle ${taskStatus}`}
+                          disabled={taskStatus === 'completed'}
+                          onClick={() => (task.id === selected?.id ? handleToggle(task.id) : flow.toggle(task.id))}
+                        >
+                          {taskStatus === 'running' ? (
+                            <Pause size={13} fill="currentColor" />
+                          ) : taskStatus === 'completed' ? (
+                            <Check size={13} />
+                          ) : (
+                            <Play size={13} fill="currentColor" />
+                          )}
+                        </IconButton>
                         <IconButton title={`Sửa ${task.name}`} onClick={() => setEditor({ taskId: task.id })}>
                           <Edit3 size={14} />
                         </IconButton>
@@ -2191,15 +2102,27 @@ export default function FlowTimer() {
                     <span>·</span>Thời gian dành cho riêng bạn
                   </p>
 
-                  {running && running.id !== selected.id && (
-                    <button
-                      className="other-running no-drag"
-                      onClick={() => flow.select(running.id)}
-                    >
-                      <i className="status-dot running" />
-                      <span>{running.name} vẫn đang chạy</span>
-                      <ArrowUpRight size={15} />
-                    </button>
+                  {otherRunning.length > 0 && (
+                    <div className="other-running-list no-drag" aria-label="Các việc khác đang chạy song song">
+                      <span className="other-running-label">
+                        <i className="status-dot running" />
+                        Đang chạy song song
+                      </span>
+                      {otherRunning.map(task => (
+                        <button
+                          key={task.id}
+                          className="other-running"
+                          style={{ '--task-color': task.color }}
+                          onClick={() => flow.select(task.id)}
+                          title={`Chuyển sang ${task.name}`}
+                        >
+                          <span className="other-running-emoji">{task.emoji}</span>
+                          <span className="other-running-name">{task.name}</span>
+                          <strong>{formatRemaining(getRemainingSeconds(task, now))}</strong>
+                          <ArrowUpRight size={14} />
+                        </button>
+                      ))}
+                    </div>
                   )}
 
                   <div className="session-summary">

@@ -3,6 +3,7 @@ import {
   checkCompletion,
   reconcileRestoredTasks,
   toggleTaskRunning,
+  pauseAllTasks,
   resetTask,
   editTask,
   generateSessionId,
@@ -33,6 +34,7 @@ export default function useFlowTimer() {
   const [now, setNow] = useState(0);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [celebration, setCelebration] = useState(null);
   const [windowState, setWindowState] = useState({ mode: 'full', pinned: true });
   const current = useRef(null);
   const lastSaved = useRef(null);
@@ -42,10 +44,13 @@ export default function useFlowTimer() {
 
   const notify = useCallback(events => {
     if (!events.length) return;
-    setNotice(`Hoàn thành ${events[0].taskName}. Nghỉ một chút nhé!`);
+    const names = events.map(e => e.taskName).join(', ');
+    setNotice(`Hoàn thành ${names}. Nghỉ một chút nhé!`);
+    setCelebration({ id: events[events.length - 1].sessionId, names, count: events.length });
     if (current.current?.soundEnabled) playCompletionSound();
     if (current.current?.desktopNotifications) {
-      desktopBridge.sendNotification('Một phiên tập trung đã hoàn thành', events[0].taskName).catch(() => {});
+      const title = events.length > 1 ? `${events.length} phiên tập trung đã hoàn thành` : 'Một phiên tập trung đã hoàn thành';
+      desktopBridge.sendNotification(title, names).catch(() => {});
     }
   }, []);
 
@@ -192,12 +197,14 @@ export default function useFlowTimer() {
     now,
     error,
     notice,
+    celebration,
     windowState,
     setNotice,
     setError,
     setMode,
     select: id => act(s => ({ ...s, selectedTaskId: id })),
     toggle,
+    pauseAll: () => act((s, time) => ({ ...s, tasks: pauseAllTasks(s.tasks, time) })),
     reset: id => act(s => ({ ...s, tasks: s.tasks.map(t => (t.id === id ? resetTask(t) : t)) })),
     adjustTime: (id, deltaSeconds) =>
       act((s, time) => {

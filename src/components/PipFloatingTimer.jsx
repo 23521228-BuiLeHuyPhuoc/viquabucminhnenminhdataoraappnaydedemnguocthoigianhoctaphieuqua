@@ -30,10 +30,16 @@ import {
   Repeat1,
   ListMusic,
   Wind,
+  LayoutPanelLeft,
+  Maximize2,
 } from 'lucide-react';
-import { getRemainingSeconds, getTaskStatus } from '../lib/timer-engine.js';
-import { formatRemaining, formatDurationShort } from '../lib/time-parser.js';
+import { getRemainingSeconds, getTaskStatus, getRunningTasks } from '../lib/timer-engine.js';
+import { formatRemaining } from '../lib/time-parser.js';
+import { lanesBlockHeight } from '../lib/multi-timer.js';
+import useTaskLanes, { useCelebration, useFocusRunningOnMount } from '../hooks/useTaskLanes';
 import AmbientBackground from './AmbientBackground';
+import { ParallelAurora, TaskLanes, LaneChips, TaskPickerRow } from './TaskLanes';
+import SlimBarRow from './SlimBarRow';
 import { ambientSound, SOUND_PRESETS } from '../lib/ambient-sound.js';
 import { ghibliMusic, GHIBLI_TRACKS, PLAYLISTS, LOOP_MODE } from '../lib/ghibli-music.js';
 
@@ -75,6 +81,11 @@ export const FAMOUS_QUOTES = [
   { text: "Small deeds done are better than great deeds planned.", author: "Peter Marshall" },
 ];
 
+// Kích thước cửa sổ PiP ở dạng thanh (chiều cao ngoài, đã gồm thanh tiêu đề của trình duyệt).
+const PIP_BAR_WIDTH = 460;
+const PIP_BAR_HEIGHT = 100;
+const PIP_MENU_HEIGHT = 390;
+
 export default function PipFloatingTimer({
   flow,
   task,
@@ -108,6 +119,13 @@ export default function PipFloatingTimer({
   const [isFading, setIsFading] = useState(false);
 
   const [ghibliState, setGhibliState] = useState(ghibliMusic.getState());
+  const [lanesCollapsed, setLanesCollapsed] = useState(false);
+  const [layout, setLayout] = useState('card');
+
+  useFocusRunningOnMount(flow, task);
+  const lanes = useTaskLanes(state.tasks, task?.id, now);
+  const celebrating = useCelebration(flow.celebration);
+  const runningTasks = getRunningTasks(state.tasks);
 
   useEffect(() => {
     const unsubAmbient = ambientSound.subscribe(type => {
@@ -157,24 +175,43 @@ export default function PipFloatingTimer({
     };
   }, []);
 
-  // Determine actual responsive layout
-  const isBar = windowSize.height <= 155;
-  const isLarge = windowSize.height > 290 && windowSize.width > 400;
-  const layout = isBar ? 'bar' : isLarge ? 'large' : 'card';
-
   // Any modal / drawer open
   const anyModal = taskPicker || soundPicker || adjustMenu || quoteMenu || confirmReset;
+  const barHeight = PIP_BAR_HEIGHT + lanesBlockHeight(lanes.entries.length, { collapsed: lanesCollapsed });
+  const anyModalRef = useRef(anyModal);
+  const barHeightRef = useRef(barHeight);
+  anyModalRef.current = anyModal;
+  barHeightRef.current = barHeight;
 
-  // Auto-resize PiP window when sub-UI opens/closes in bar mode
+  // onResize thường là hàm inline (đổi danh tính mỗi lần render) → giữ trong ref để các effect
+  // chỉ co giãn cửa sổ khi menu / bố cục / số làn thật sự đổi, không ép kích thước mỗi giây.
+  const onResizeRef = useRef(onResize);
+  onResizeRef.current = onResize;
+  const requestedSizeRef = useRef(null);
+  const requestResize = (width, height) => {
+    if (!onResizeRef.current) return;
+    requestedSizeRef.current = { width, height };
+    onResizeRef.current(width, height);
+  };
+
+  // Chọn bố cục theo kích thước thật của cửa sổ — chỉ khi người dùng tự kéo giãn. Kích thước do app
+  // tự yêu cầu (mở menu, thêm/bớt làn, bấm Thanh/Thẻ/Lớn) giữ nguyên bố cục đã chọn.
   useEffect(() => {
-    if (isBar && onResize) {
-      if (anyModal) {
-        onResize(440, 390);
-      } else {
-        onResize(440, 95);
-      }
-    }
-  }, [anyModal, isBar, onResize]);
+    if (anyModalRef.current) return;
+    const { width, height } = windowSize;
+    const requested = requestedSizeRef.current;
+    // innerHeight nhỏ hơn kích thước yêu cầu một khoảng bằng thanh tiêu đề của cửa sổ PiP
+    if (requested && Math.abs(width - requested.width) <= 40 && Math.abs(height - requested.height) <= 60) return;
+    setLayout(height <= barHeightRef.current + 60 ? 'bar' : height > 290 && width > 400 ? 'large' : 'card');
+  }, [windowSize]);
+
+  const isBar = layout === 'bar';
+
+  // Auto-resize PiP window when sub-UI opens/closes or parallel lanes change in bar mode
+  useEffect(() => {
+    if (isBar) requestResize(PIP_BAR_WIDTH, anyModal ? Math.max(PIP_MENU_HEIGHT, barHeight) : barHeight);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anyModal, isBar, barHeight]);
 
   // Clean up sound on unmount
   useEffect(() => {
@@ -215,19 +252,17 @@ export default function PipFloatingTimer({
   };
 
   const handleSizeSelect = mode => {
-    if (mode === 'bar') {
-      setCustomInput(false);
-      setTaskPicker(false);
-      setSoundPicker(false);
-      setConfirmReset(false);
-      setAdjustMenu(false);
-      setQuoteMenu(false);
-    }
-    if (onResize) {
-      if (mode === 'bar') onResize(440, 95);
-      else if (mode === 'large') onResize(480, 360);
-      else onResize(380, 270);
-    }
+    setCustomInput(false);
+    setTaskPicker(false);
+    setSoundPicker(false);
+    setConfirmReset(false);
+    setAdjustMenu(false);
+    setQuoteMenu(false);
+    setLayout(mode);
+    const extra = lanes.entries.length ? 30 : 0;
+    if (mode === 'bar') requestResize(PIP_BAR_WIDTH, barHeight);
+    else if (mode === 'large') requestResize(480, 360 + extra);
+    else requestResize(380, 270 + extra);
   };
 
   const handleParticleCycle = () => {
@@ -269,10 +304,18 @@ export default function PipFloatingTimer({
   return (
     <div
       ref={containerRef}
-      className={`pip-root layout-${layout}`}
+      className={`pip-root layout-${layout} ${isBar ? 'bar-shell' : ''} ${anyModal ? 'modal-open' : ''} ${celebrating ? 'celebrate' : ''}`}
       data-layout={layout}
       style={{ '--accent': task?.color || '#a8c58a' }}
     >
+      <ParallelAurora tasks={runningTasks} />
+      {celebrating && (
+        <div className="mini-celebrate-ribbon" role="status" key={celebrating.id}>
+          <span className="ribbon-spark">✦</span>
+          Hoàn thành: <strong>{celebrating.names}</strong>
+          <span className="ribbon-spark">✦</span>
+        </div>
+      )}
       {/* Dynamic Mesh + Animated Particle Canvas (Snow / Stardust) */}
       <AmbientBackground
         visualState={visualState}
@@ -284,37 +327,41 @@ export default function PipFloatingTimer({
       {taskPicker && (
         <div className="pip-task-modal">
           <div className="pip-modal-header">
-            <span>Đổi công việc học tập ({state.tasks.length})</span>
-            <button
-              type="button"
-              className="pip-icon-btn"
-              onClick={() => setTaskPicker(false)}
-              title="Đóng danh sách"
-            >
-              <X size={14} />
-            </button>
+            <span>
+              {state.tasks.length} công việc
+              {runningTasks.length > 0 && <em className="menu-running-count"> · {runningTasks.length} đang chạy</em>}
+            </span>
+            <div className="modal-title-with-icon">
+              {runningTasks.length > 0 && (
+                <button type="button" className="pause-all-btn" onClick={flow.pauseAll} title="Tạm dừng mọi việc đang chạy">
+                  <Pause size={11} fill="currentColor" />Dừng tất cả
+                </button>
+              )}
+              <button
+                type="button"
+                className="pip-icon-btn"
+                onClick={() => setTaskPicker(false)}
+                title="Đóng danh sách"
+              >
+                <X size={14} />
+              </button>
+            </div>
           </div>
           <div className="pip-modal-list">
-            {state.tasks.map(t => {
-              const isCurrent = t.id === task?.id;
-              const rem = getRemainingSeconds(t, now);
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  className={`pip-task-row ${isCurrent ? 'active' : ''}`}
-                  onClick={() => {
-                    flow.select(t.id);
-                    setTaskPicker(false);
-                  }}
-                >
-                  <span className="dot" style={{ background: t.color }} />
-                  <span className="emoji">{t.emoji}</span>
-                  <span className="name">{t.name}</span>
-                  <span className="time">{formatDurationShort(rem)}</span>
-                </button>
-              );
-            })}
+            {state.tasks.map(t => (
+              <TaskPickerRow
+                key={t.id}
+                task={t}
+                now={now}
+                active={t.id === task?.id}
+                rowClassName="pip-task-row"
+                onSelect={id => {
+                  flow.select(id);
+                  setTaskPicker(false);
+                }}
+                onToggle={flow.toggle}
+              />
+            ))}
           </div>
         </div>
       )}
@@ -683,248 +730,83 @@ export default function PipFloatingTimer({
         /* ======================================================== */
         /* COMPACT / BAR VIEW — TỐI ƯU TOÀN DIỆN VỚI ĐỦ TÍNH NĂNG     */
         /* ======================================================== */
-        <div className="pip-bar-view">
-          {confirmReset ? (
-            <div className="pip-bar-confirm">
-              <span className="confirm-text">Đặt lại “{task?.name}”?</span>
-              <div className="confirm-actions">
-                <button
-                  type="button"
-                  className="confirm-btn-pill cancel"
-                  onClick={() => setConfirmReset(false)}
-                >
-                  Hủy
-                </button>
-                <button
-                  type="button"
-                  className="confirm-btn-pill danger"
-                  onClick={() => {
-                    setConfirmReset(false);
-                    if (task) onReset(task.id);
-                  }}
-                >
-                  Đặt lại
-                </button>
-              </div>
-            </div>
-          ) : (
+        <SlimBarRow
+          className="pip-bar-row"
+          clipId={`${clipId}-sm`}
+          task={task}
+          status={status}
+          left={left}
+          percent={percent}
+          fraction={fraction}
+          visualMode={visualMode}
+          onCycleVisual={cycleVisualMode}
+          lanes={lanes}
+          lanesCollapsed={lanesCollapsed}
+          onToggleLanes={() => setLanesCollapsed(value => !value)}
+          now={now}
+          onOpenPicker={() => {
+            setTaskPicker(!taskPicker);
+            setSoundPicker(false);
+            setAdjustMenu(false);
+            setQuoteMenu(false);
+          }}
+          ghibliState={ghibliState}
+          onMusic={() => {
+            setSoundPicker(!soundPicker);
+            setTaskPicker(false);
+            setAdjustMenu(false);
+            setQuoteMenu(false);
+          }}
+          onPlus5={() => task && onAdjustTime(task.id, 300)}
+          onAdjustMenu={() => {
+            setAdjustMenu(!adjustMenu);
+            setSoundPicker(false);
+            setTaskPicker(false);
+            setQuoteMenu(false);
+          }}
+          quoteActive={quoteMenu}
+          quoteTitle={`Danh ngôn: “${FAMOUS_QUOTES[quoteIdx].text}” — ${FAMOUS_QUOTES[quoteIdx].author}`}
+          onQuote={() => {
+            setQuoteMenu(!quoteMenu);
+            setSoundPicker(false);
+            setTaskPicker(false);
+            setAdjustMenu(false);
+          }}
+          onReset={handleResetClick}
+          onToggle={() => task && onToggle(task.id)}
+          confirmReset={false}
+          windowControls={
             <>
-              {/* 1. Trái: Task selector chip */}
               <button
                 type="button"
-                className="pip-task-chip"
-                onClick={() => {
-                  setTaskPicker(!taskPicker);
-                  setSoundPicker(false);
-                  setAdjustMenu(false);
-                  setQuoteMenu(false);
-                }}
-                disabled={!task}
-                title="Bấm để đổi nhanh công việc"
+                className="icon-button"
+                onClick={() => handleSizeSelect('card')}
+                title="Mở rộng sang dạng Thẻ"
+                aria-label="Mở rộng sang dạng Thẻ"
               >
-                <span
-                  className={`status-pulse-dot ${status}`}
-                  style={{ '--dot-color': task?.color || 'var(--accent)' }}
-                />
-                <span className="emoji">{task?.emoji || '✦'}</span>
-                <span className="name">{task?.name || 'Chưa chọn'}</span>
-                <ChevronDown size={11} className="chevron" />
+                <LayoutPanelLeft size={11} />
               </button>
-
-              {/* 2. Giữa: Visual Orb + Digits + Progress % */}
-              <div className="pip-bar-center">
-                {/* Visual Orb: Click to cycle Hourglass / Ring / Digits */}
-                <button
-                  type="button"
-                  className={`mini-visual-orb ${status === 'running' ? 'running' : ''}`}
-                  onClick={cycleVisualMode}
-                  title={`Hiệu ứng: ${visualMode === 'hourglass' ? 'Đồng hồ cát' : visualMode === 'ring' ? 'Vòng sáng' : 'Chữ số'} (Bấm để đổi)`}
-                >
-                  {visualMode === 'hourglass' ? (
-                    <svg className="mini-hourglass-svg-sm" viewBox="0 0 100 110" aria-hidden="true">
-                      <defs>
-                        <clipPath id={`${clipId}-sm`}>
-                          <path d="M22 12H78V25C78 39 58 45 53 54C58 65 78 70 78 85V98H22V85C22 70 42 65 47 54C42 45 22 39 22 25Z" />
-                        </clipPath>
-                      </defs>
-                      <g clipPath={`url(#${clipId}-sm)`}>
-                        <rect x="15" y={54 - fraction * 42} width="70" height={fraction * 42} fill="var(--accent)" opacity="0.8" />
-                        <rect x="15" y={98 - (1 - fraction) * 42} width="70" height={(1 - fraction) * 42} fill="var(--accent)" />
-                        {status === 'running' && (
-                          <path d={`M50 54V${98 - (1 - fraction) * 42}`} stroke="var(--accent)" strokeWidth="3" strokeDasharray="2 3" />
-                        )}
-                      </g>
-                      <path d="M22 12H78V25C78 39 58 45 53 54C58 65 78 70 78 85V98H22V85C22 70 42 65 47 54C42 45 22 39 22 25Z" fill="none" stroke="currentColor" strokeOpacity="0.4" strokeWidth="2.5" />
-                      <path d="M17 9H83M17 101H83" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
-                    </svg>
-                  ) : visualMode === 'ring' ? (
-                    <svg className="mini-ring-svg-sm" viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="40" className="ring-track" />
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        className="ring-progress"
-                        stroke="var(--accent)"
-                        strokeDasharray={2 * Math.PI * 40}
-                        strokeDashoffset={2 * Math.PI * 40 * (1 - fraction)}
-                        transform="rotate(-90 50 50)"
-                      />
-                    </svg>
-                  ) : (
-                    <Clock size={13} />
-                  )}
-                </button>
-
-                {/* Main Digits */}
-                <span className={`pip-digits-bar ${status === 'running' ? 'running' : ''}`}>
-                  {formatRemaining(left)}
-                </span>
-
-                {/* Percentage Badge */}
-                <span className={`mini-percent-badge ${status === 'running' ? 'running' : ''}`}>
-                  {Math.round(percent)}%
-                </span>
-              </div>
-
-              {/* 3. Phải: Music Hub, Adjust, Quote, Reset, Play/Pause, Controls */}
-              <div className="pip-bar-actions">
-                {/* Ghibli Music & Sound Hub Button */}
-                <button
-                  type="button"
-                  className={`mini-ghibli-btn ${ghibliState.isPlaying ? 'playing' : ''}`}
-                  onClick={() => {
-                    setSoundPicker(!soundPicker);
-                    setTaskPicker(false);
-                    setAdjustMenu(false);
-                    setQuoteMenu(false);
-                  }}
-                  title={
-                    ghibliState.isPlaying
-                      ? `Đang phát: ${ghibliState.currentTrack.title} — Bấm để chọn danh sách / trộn bài / lặp`
-                      : 'Bật nhạc Ghibli Lofi & Âm tập trung'
-                  }
-                >
-                  <Music size={12} />
-                  {ghibliState.isPlaying ? (
-                    <span className="mini-eq-bars">
-                      <i className="b1" />
-                      <i className="b2" />
-                      <i className="b3" />
-                    </span>
-                  ) : (
-                    <span>Ghibli</span>
-                  )}
-                </button>
-
-                {/* Time Adjust: Quick +5p + Dropdown trigger */}
-                <button
-                  type="button"
-                  className="adjust-pill"
-                  disabled={!task}
-                  onClick={() => task && onAdjustTime(task.id, 300)}
-                  onContextMenu={e => {
-                    e.preventDefault();
-                    setAdjustMenu(!adjustMenu);
-                    setSoundPicker(false);
-                    setTaskPicker(false);
-                    setQuoteMenu(false);
-                  }}
-                  title="Cộng 5 phút (Chuột phải hoặc bấm mũi tên để mở menu chỉnh giờ)"
-                >
-                  +5p
-                </button>
-                <button
-                  type="button"
-                  className="pip-icon-btn"
-                  style={{ width: 18, height: 24, padding: 0 }}
-                  onClick={() => {
-                    setAdjustMenu(!adjustMenu);
-                    setSoundPicker(false);
-                    setTaskPicker(false);
-                    setQuoteMenu(false);
-                  }}
-                  title="Tùy chọn chỉnh giờ (-5p, -1p, +1p, +5p, sửa phút)"
-                >
-                  <ChevronDown size={11} />
-                </button>
-
-                {/* Inspirational Quote Sparkle Button */}
-                <button
-                  type="button"
-                  className={`mini-quote-btn ${quoteMenu ? 'active' : ''}`}
-                  onClick={() => {
-                    setQuoteMenu(!quoteMenu);
-                    setSoundPicker(false);
-                    setTaskPicker(false);
-                    setAdjustMenu(false);
-                  }}
-                  title={`Danh ngôn: “${FAMOUS_QUOTES[quoteIdx].text}” — ${FAMOUS_QUOTES[quoteIdx].author}`}
-                >
-                  <Sparkles size={12} />
-                </button>
-
-                {/* Safe Reset Button */}
-                <button
-                  type="button"
-                  className="pip-reset-btn sm"
-                  disabled={!task}
-                  onClick={handleResetClick}
-                  title="Đặt lại phiên này"
-                >
-                  <RotateCcw size={13} />
-                </button>
-
-                {/* Master Play / Pause Button */}
-                <button
-                  type="button"
-                  className="pip-play-btn sm"
-                  disabled={!task || status === 'completed'}
-                  onClick={() => task && onToggle(task.id)}
-                  title={status === 'running' ? 'Tạm dừng' : 'Tiếp tục'}
-                >
-                  {status === 'completed' ? (
-                    <Check size={15} />
-                  ) : status === 'running' ? (
-                    <Pause size={15} fill="currentColor" />
-                  ) : (
-                    <Play size={15} fill="currentColor" />
-                  )}
-                </button>
-
-                {/* Size Controls */}
-                <div className="pip-size-controls sm">
-                  <button
-                    type="button"
-                    className="pip-size-btn"
-                    onClick={() => handleSizeSelect('card')}
-                    title="Mở rộng sang Thẻ"
-                  >
-                    Thẻ
-                  </button>
-                  <button
-                    type="button"
-                    className="pip-size-btn"
-                    onClick={() => handleSizeSelect('large')}
-                    title="Mở rộng sang Lớn"
-                  >
-                    Lớn
-                  </button>
-                </div>
-
-                {/* Close Button */}
-                <button
-                  type="button"
-                  className="pip-icon-btn close-pip"
-                  onClick={onClose}
-                  title="Đóng / Trở về tab chính"
-                >
-                  <X size={14} />
-                </button>
-              </div>
+              <button
+                type="button"
+                className="icon-button expand-btn"
+                onClick={() => handleSizeSelect('large')}
+                title="Mở rộng sang dạng Lớn"
+                aria-label="Mở rộng sang dạng Lớn"
+              >
+                <Maximize2 size={11} />
+              </button>
+              <button
+                type="button"
+                className="icon-button close-button"
+                onClick={onClose}
+                title="Đóng / Trở về tab chính"
+                aria-label="Đóng / Trở về tab chính"
+              >
+                <X size={12} />
+              </button>
             </>
-          )}
-        </div>
+          }
+        />
       ) : (
         /* ======================================================== */
         /* CARD & LARGE VIEW                                        */
@@ -1268,7 +1150,26 @@ export default function PipFloatingTimer({
               </button>
             </form>
           )}
+
+          {/* Các việc khác đang đếm ngược song song */}
+          <LaneChips lanes={lanes} now={now} onToggle={flow.toggle} onFocus={flow.select} />
         </>
+      )}
+
+      {isBar && !lanesCollapsed && (
+        <TaskLanes
+          lanes={lanes}
+          now={now}
+          onToggle={flow.toggle}
+          onFocus={flow.select}
+          onDismiss={lanes.dismiss}
+          onMore={() => {
+            setTaskPicker(true);
+            setSoundPicker(false);
+            setAdjustMenu(false);
+            setQuoteMenu(false);
+          }}
+        />
       )}
 
       {/* Persistent Bottom Progress Track */}

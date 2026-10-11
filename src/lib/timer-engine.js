@@ -86,13 +86,19 @@ export function editTask(task, changes) {
   const updated = { ...task, ...changes, id: task.id, goal };
   return goal === task.goal ? updated : resetTask(updated);
 }
+// Every task owns its own deadline, so any number of tasks can count down at once:
+// starting or pausing one task never touches the others.
 export function toggleTaskRunning(tasks, targetTaskId, now = Date.now()) {
   const target = tasks.find(t => t.id === targetTaskId);
-  // Starting a completed task must not pause another task.
   if (!target || getRemainingSeconds(target, now) <= 0) return tasks;
-  if (isTaskRunning(target)) return tasks.map(t => t.id === targetTaskId ? pauseTask(t, now) : t);
-  return tasks.map(t => t.id === targetTaskId ? startTask(t, now) : pauseTask(t, now));
+  const next = isTaskRunning(target) ? pauseTask(target, now) : startTask(target, now);
+  return tasks.map(t => (t.id === targetTaskId ? next : t));
 }
+export function pauseAllTasks(tasks, now = Date.now()) {
+  if (!tasks.some(isTaskRunning)) return tasks;
+  return tasks.map(t => pauseTask(t, now));
+}
+export const getRunningTasks = tasks => (Array.isArray(tasks) ? tasks.filter(isTaskRunning) : []);
 export function checkCompletion(tasks, handledSessionIds = new Set(), now = Date.now()) {
   const completionEvents = [];
   let changed = false;
@@ -112,11 +118,9 @@ export function checkCompletion(tasks, handledSessionIds = new Set(), now = Date
 }
 export function reconcileRestoredTasks(savedTasks, handledSessionIds = new Set(), now = Date.now()) {
   const result = checkCompletion(savedTasks || [], handledSessionIds, now);
-  let hasRunning = false;
+  // Every task that was still counting down keeps running, each with its own remaining time.
   const tasks = result.updatedTasks.map(t => {
     if (!isTaskRunning(t)) return t;
-    if (hasRunning) return pauseTask(t, now);
-    hasRunning = true;
     const left = getRemainingSeconds(t, now);
     return { ...t, left, runStart: now, endAt: now + left * 1000 };
   });
